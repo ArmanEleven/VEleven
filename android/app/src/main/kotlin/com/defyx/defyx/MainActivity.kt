@@ -292,7 +292,9 @@ class MainActivity : FlutterActivity() {
             }
 
     private fun sendVpnStatusToFlutter(status: String) {
-        eventSink?.success(mapOf("status" to status))
+        runOnUiThread {
+            eventSink?.success(mapOf("status" to status))
+        }
     }
 
     private fun calculatePing(result: MethodChannel.Result) {
