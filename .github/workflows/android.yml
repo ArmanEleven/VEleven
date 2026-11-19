@@ -67,23 +67,39 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.DXCORE_PRIVATE_ACCESS_TOKEN }}
         run: |
+          set -euo pipefail
           mkdir -p android/app/libs
-          curl -s -H "Authorization: token $GITHUB_TOKEN" \
-            https://api.github.com/repos/UnboundTechCo/DXcore-private/releases/latest | tee api.json
 
-          ASSET_ID=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
-            https://api.github.com/repos/UnboundTechCo/DXcore-private/releases/latest \
-            | jq -r '.assets[] | select(.name == "DXcore-android.zip") | .id')
-          echo "Asset ID: $ASSET_ID"
-          curl -L \
-            -H "Authorization: token $GITHUB_TOKEN" \
+          if [ -z "${GITHUB_TOKEN:-}" ]; then
+            echo "::error::Missing DXCORE_PRIVATE_ACCESS_TOKEN repository secret."
+            exit 1
+          fi
+
+          RELEASE_URL="https://api.github.com/repos/UnboundTechCo/DXcore-private/releases/latest"
+          if ! curl -fsS -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github+json" "$RELEASE_URL" -o release.json; then
+            echo "::error::Cannot access the DXcore-private latest release. Check repository access and whether a release has been published."
+            exit 1
+          fi
+
+          ASSET_ID=$(jq -er '.assets[]? | select(.name == "DXcore-android.zip") | .id' release.json | head -n 1 || true)
+          if [ -z "$ASSET_ID" ]; then
+            echo "::error::The latest DXcore-private release does not contain DXcore-android.zip."
+            exit 1
+          fi
+
+          curl -fL --retry 3 \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
             -H "Accept: application/octet-stream" \
             "https://api.github.com/repos/UnboundTechCo/DXcore-private/releases/assets/$ASSET_ID" \
             -o android/app/libs/DXcore-android.zip
+
+          unzip -tq android/app/libs/DXcore-android.zip
           cd android/app/libs
           unzip -o DXcore-android.zip
+          test -d build/android || { echo "::error::DXcore archive is missing build/android."; exit 1; }
           mv build/android/* .
-          rm DXcore-android.zip
+          rm -rf DXcore-android.zip build
 
       - name: Download pinned Xray Android core
         run: |
@@ -190,23 +206,39 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.DXCORE_PRIVATE_ACCESS_TOKEN }}
         run: |
+          set -euo pipefail
           mkdir -p android/app/libs
-          curl -s -H "Authorization: token $GITHUB_TOKEN" \
-            https://api.github.com/repos/UnboundTechCo/DXcore-private/releases/latest | tee api.json
 
-          ASSET_ID=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
-            https://api.github.com/repos/UnboundTechCo/DXcore-private/releases/latest \
-            | jq -r '.assets[] | select(.name == "DXcore-android.zip") | .id')
-          echo "Asset ID: $ASSET_ID"
-          curl -L \
-            -H "Authorization: token $GITHUB_TOKEN" \
+          if [ -z "${GITHUB_TOKEN:-}" ]; then
+            echo "::error::Missing DXCORE_PRIVATE_ACCESS_TOKEN repository secret."
+            exit 1
+          fi
+
+          RELEASE_URL="https://api.github.com/repos/UnboundTechCo/DXcore-private/releases/latest"
+          if ! curl -fsS -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github+json" "$RELEASE_URL" -o release.json; then
+            echo "::error::Cannot access the DXcore-private latest release. Check repository access and whether a release has been published."
+            exit 1
+          fi
+
+          ASSET_ID=$(jq -er '.assets[]? | select(.name == "DXcore-android.zip") | .id' release.json | head -n 1 || true)
+          if [ -z "$ASSET_ID" ]; then
+            echo "::error::The latest DXcore-private release does not contain DXcore-android.zip."
+            exit 1
+          fi
+
+          curl -fL --retry 3 \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
             -H "Accept: application/octet-stream" \
             "https://api.github.com/repos/UnboundTechCo/DXcore-private/releases/assets/$ASSET_ID" \
             -o android/app/libs/DXcore-android.zip
+
+          unzip -tq android/app/libs/DXcore-android.zip
           cd android/app/libs
           unzip -o DXcore-android.zip
+          test -d build/android || { echo "::error::DXcore archive is missing build/android."; exit 1; }
           mv build/android/* .
-          rm DXcore-android.zip
+          rm -rf DXcore-android.zip build
 
       - name: Download pinned Xray Android core
         run: |
