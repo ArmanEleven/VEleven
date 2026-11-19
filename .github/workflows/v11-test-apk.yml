@@ -64,7 +64,6 @@ jobs:
           mkdir -p "$RUNNER_TEMP/.android"
           chmod 700 "$RUNNER_TEMP/.android"
           echo "ANDROID_USER_HOME=$RUNNER_TEMP/.android" >> "$GITHUB_ENV"
-          echo "ANDROID_PREFS_ROOT=$RUNNER_TEMP/.android" >> "$GITHUB_ENV"
           echo "HOME=$RUNNER_TEMP" >> "$GITHUB_ENV"
 
       - name: Build arm64 debug APK
