@@ -392,8 +392,10 @@ class _V2RayScreenState extends ConsumerState<V2RayScreen> {
     if (_connecting) return;
     setState(() => _connecting = true);
     try {
-      await VpnBridge().connectXray(configJson: profile['configJson']!);
-      _showMessage(_isPersian ? 'درخواست اتصال ارسال شد.' : 'Connection request sent.');
+      final connected = await VpnBridge().connectXray(configJson: profile['configJson']!);
+      _showMessage(connected
+          ? (_isPersian ? 'اتصال برقرار شد.' : 'Connected successfully.')
+          : (_isPersian ? 'اتصال برقرار نشد؛ مجوز یا کانفیگ را بررسی کن.' : 'Connection failed. Check permission and config.'));
     } catch (error) {
       _showMessage(_isPersian ? 'اتصال شروع نشد.' : 'Could not start the connection.');
     } finally {
