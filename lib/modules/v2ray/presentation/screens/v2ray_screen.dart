@@ -400,12 +400,14 @@ class _V2RayScreenState extends ConsumerState<V2RayScreen> {
         options: Options(responseType: ResponseType.plain, followRedirects: true));
       var body = (response.data ?? '').trim();
       final info = response.headers.value('subscription-userinfo') ?? '';
-      final total = RegExp(r'total=(\d+)').firstMatch(info)?.group(1);
-      final expire = RegExp(r'expire=(\d+)').firstMatch(info)?.group(1);
+      final total = int.tryParse(RegExp(r'total=(\d+)').firstMatch(info)?.group(1) ?? '');
+      final upload = int.tryParse(RegExp(r'upload=(\d+)').firstMatch(info)?.group(1) ?? '') ?? 0;
+      final download = int.tryParse(RegExp(r'download=(\d+)').firstMatch(info)?.group(1) ?? '') ?? 0;
+      final expire = int.tryParse(RegExp(r'expire=(\d+)').firstMatch(info)?.group(1) ?? '');
       setState(() {
-        if (total != null) _usageText = total + ' bytes';
-        if (expire != null && int.tryParse(expire)! > 0) {
-          _expiryText = DateTime.fromMillisecondsSinceEpoch(int.parse(expire) * 1000).toLocal().toString().split('.').first;
+        if (total != null) _usageText = '${upload + download} / $total bytes';
+        if (expire != null && expire > 0) {
+          _expiryText = DateTime.fromMillisecondsSinceEpoch(expire * 1000).toLocal().toString().split('.').first;
         }
       });
       if (!body.contains('://')) {
