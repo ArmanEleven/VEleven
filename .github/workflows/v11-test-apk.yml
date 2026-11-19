@@ -1,0 +1,89 @@
+name: V11 Development APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feat/xray-engine-integration
+    paths:
+      - "lib/**"
+      - "android/**"
+      - ".github/workflows/v11-test-apk.yml"
+      - "pubspec.yaml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-test-apk:
+    name: Build arm64 test APK (DXcore mock)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.6"
+          channel: stable
+          architecture: x64
+          cache: false
+
+      - name: Install Android NDK
+        run: |
+          yes | sudo "${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" --install "ndk;29.0.13846066"
+          echo "ndk.dir=${ANDROID_HOME}/ndk/29.0.13846066" > android/local.properties
+
+      - name: Download public DXcore development mock
+        run: |
+          set -euo pipefail
+          mkdir -p android/app/libs
+          curl -fL --retry 3 \
+            "https://github.com/UnboundTechCo/DXcore/releases/download/r4/DXcore-android.zip" \
+            -o /tmp/DXcore-android.zip
+          echo "225d9c5661ccf7f278b584029fce4cce9940ad961643e98e6366b429d4360fb1  /tmp/DXcore-android.zip" | sha256sum -c -
+          mkdir -p /tmp/dxcore-mock
+          unzip -q /tmp/DXcore-android.zip -d /tmp/dxcore-mock
+          DXCORE_AAR="$(find /tmp/dxcore-mock -type f -name 'DXcore.aar' -print -quit)"
+          if [ -z "$DXCORE_AAR" ]; then
+            echo "::error::DXcore.aar not found in the public mock archive."
+            find /tmp/dxcore-mock -maxdepth 5 -type f -print
+            exit 1
+          fi
+          cp "$DXCORE_AAR" android/app/libs/DXcore.aar
+          echo "Installed development mock: $DXCORE_AAR"
+
+      - name: Download pinned Xray Android core
+        run: |
+          curl -fL --retry 3 \
+            "https://github.com/2dust/AndroidLibXrayLite/releases/download/v26.11.9/libv2ray.aar" \
+            -o android/app/libs/libv2ray.aar
+          test -s android/app/libs/libv2ray.aar
+
+      - name: Generate environment file
+        uses: ./.github/actions/create-env
+        with:
+          secret_blob: ${{ toJson(secrets) }}
+          var_blob: ${{ toJson(vars) }}
+          os_name: android
+
+      - name: Install Flutter dependencies
+        run: flutter pub get
+
+      - name: Build arm64 debug APK
+        run: flutter build apk --debug --target-platform android-arm64
+
+      - name: Upload test APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: VELEVEN-V11-test-arm64-DXcore-MOCK
+          path: build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk
+          if-no-files-found: error
+          retention-days: 7
