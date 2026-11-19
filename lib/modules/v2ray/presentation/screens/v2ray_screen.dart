@@ -61,6 +61,209 @@ class _V2RayScreenState extends ConsumerState<V2RayScreen> {
     await ref.read(secureStorageProvider).write(_storageKey, jsonEncode(_profiles));
   }
 
+  Map<String, dynamic> _buildXrayConfig(String input) {
+    final raw = input.trim();
+    if (raw.startsWith('vless://')) {
+      return _buildVlessConfig(Uri.parse(raw));
+    }
+    if (raw.startsWith('vmess://')) {
+      final encoded = raw.substring('vmess://'.length).split('#').first;
+      final normalized = base64Url.normalize(encoded);
+      final decoded = jsonDecode(utf8.decode(base64Url.decode(normalized)));
+      if (decoded is! Map<String, dynamic>) {
+        throw const FormatException('Invalid VMess payload');
+      }
+      return _buildVmessConfig(decoded);
+    }
+
+    final decoded = jsonDecode(raw);
+    if (decoded is! Map<String, dynamic> ||
+        decoded['outbounds'] is! List ||
+        (decoded['outbounds'] as List).isEmpty) {
+      throw const FormatException('Invalid Xray config');
+    }
+    _ensureTunInbound(decoded);
+    return decoded;
+  }
+
+  Map<String, dynamic> _buildVlessConfig(Uri uri) {
+    final query = uri.queryParameters;
+    final network = query['type'] ?? 'tcp';
+    final security = query['security'] ?? 'none';
+    final userId = Uri.decodeComponent(uri.userInfo);
+    if (userId.isEmpty || uri.host.isEmpty || uri.port <= 0) {
+      throw const FormatException('Invalid VLESS link');
+    }
+
+    final stream = <String, dynamic>{
+      'network': network,
+      'security': security,
+    };
+    if (security == 'tls') {
+      stream['tlsSettings'] = {
+        'serverName': query['sni'] ?? query['serverName'] ?? uri.host,
+        'allowInsecure': false,
+        if (query['fp'] != null) 'fingerprint': query['fp'],
+        if (query['alpn'] != null) 'alpn': query['alpn']!.split(','),
+      };
+    } else if (security == 'reality') {
+      stream['realitySettings'] = {
+        'serverName': query['sni'] ?? uri.host,
+        'fingerprint': query['fp'] ?? 'chrome',
+        if (query['pbk'] != null) 'publicKey': query['pbk'],
+        if (query['sid'] != null) 'shortId': query['sid'],
+        if (query['spx'] != null) 'spiderX': query['spx'],
+      };
+    }
+    _addTransportSettings(stream, network, query['path'], query['host'], query['serviceName']);
+
+    final outbound = <String, dynamic>{
+      'tag': 'proxy',
+      'protocol': 'vless',
+      'settings': {
+        'vnext': [
+          {
+            'address': uri.host,
+            'port': uri.port,
+            'users': [
+              {
+                'id': userId,
+                'encryption': query['encryption'] ?? 'none',
+                if (query['flow'] != null && query['flow']!.isNotEmpty) 'flow': query['flow'],
+              }
+            ],
+          }
+        ],
+      },
+      'streamSettings': stream,
+    };
+    return _wrapOutbound(outbound);
+  }
+
+  Map<String, dynamic> _buildVmessConfig(Map<String, dynamic> source) {
+    final host = (source['add'] ?? '').toString();
+    final port = int.tryParse((source['port'] ?? '').toString()) ?? 0;
+    final id = (source['id'] ?? '').toString();
+    if (host.isEmpty || port <= 0 || id.isEmpty) {
+      throw const FormatException('Invalid VMess link');
+    }
+    final network = (source['net'] ?? 'tcp').toString();
+    final security = (source['tls'] ?? '').toString() == 'tls' ? 'tls' : 'none';
+    final query = <String, String>{
+      if (source['path'] != null) 'path': source['path'].toString(),
+      if (source['host'] != null) 'host': source['host'].toString(),
+    };
+    final stream = <String, dynamic>{'network': network, 'security': security};
+    if (security == 'tls') {
+      stream['tlsSettings'] = {
+        'serverName': (source['sni'] ?? source['host'] ?? host).toString(),
+        'allowInsecure': false,
+        if (source['fp'] != null) 'fingerprint': source['fp'].toString(),
+      };
+    }
+    _addTransportSettings(stream, network, query['path'], query['host'], source['path']?.toString());
+
+    final outbound = <String, dynamic>{
+      'tag': 'proxy',
+      'protocol': 'vmess',
+      'settings': {
+        'vnext': [
+          {
+            'address': host,
+            'port': port,
+            'users': [
+              {
+                'id': id,
+                'alterId': int.tryParse((source['aid'] ?? '0').toString()) ?? 0,
+                'security': (source['scy'] ?? 'auto').toString(),
+              }
+            ],
+          }
+        ],
+      },
+      'streamSettings': stream,
+    };
+    return _wrapOutbound(outbound);
+  }
+
+  void _addTransportSettings(
+    Map<String, dynamic> stream,
+    String network,
+    String? path,
+    String? host,
+    String? serviceName,
+  ) {
+    if (network == 'ws') {
+      stream['wsSettings'] = {
+        'path': path ?? '/',
+        if (host != null && host.isNotEmpty) 'headers': {'Host': host},
+      };
+    } else if (network == 'grpc') {
+      stream['grpcSettings'] = {
+        'serviceName': serviceName ?? path ?? '',
+      };
+    } else if (network == 'httpupgrade') {
+      stream['httpupgradeSettings'] = {
+        'path': path ?? '/',
+        if (host != null && host.isNotEmpty) 'host': host,
+      };
+    }
+  }
+
+  Map<String, dynamic> _wrapOutbound(Map<String, dynamic> outbound) {
+    final config = <String, dynamic>{
+      'log': {'loglevel': 'warning'},
+      'inbounds': [
+        {
+          'tag': 'tun',
+          'protocol': 'tun',
+          'settings': {'name': 'xray0', 'MTU': 1500, 'userLevel': 8},
+          'sniffing': {
+            'enabled': true,
+            'destOverride': ['http', 'tls', 'quic'],
+          },
+        }
+      ],
+      'outbounds': [
+        outbound,
+        {
+          'tag': 'direct',
+          'protocol': 'freedom',
+          'settings': {},
+        },
+        {
+          'tag': 'block',
+          'protocol': 'blackhole',
+          'settings': {'response': {'type': 'http'}},
+        },
+      ],
+      'routing': {'domainStrategy': 'AsIs', 'rules': []},
+    };
+    return config;
+  }
+
+  void _ensureTunInbound(Map<String, dynamic> config) {
+    final inbounds = config['inbounds'] is List
+        ? config['inbounds'] as List
+        : <dynamic>[];
+    final hasTun = inbounds.any(
+      (item) => item is Map && item['protocol'] == 'tun',
+    );
+    if (!hasTun) {
+      inbounds.add({
+        'tag': 'tun',
+        'protocol': 'tun',
+        'settings': {'name': 'xray0', 'MTU': 1500, 'userLevel': 8},
+        'sniffing': {
+          'enabled': true,
+          'destOverride': ['http', 'tls', 'quic'],
+        },
+      });
+    }
+    config['inbounds'] = inbounds;
+    config.putIfAbsent('routing', () => {'domainStrategy': 'AsIs', 'rules': []});
+  }
+
   Future<void> _addProfile() async {
     _nameController.clear();
     _configController.clear();
@@ -89,8 +292,8 @@ class _V2RayScreenState extends ConsumerState<V2RayScreen> {
                   enableSuggestions: false,
                   decoration: InputDecoration(
                     alignLabelWithHint: true,
-                    labelText: _isPersian ? 'کانفیگ کامل Xray با فرمت JSON' : 'Full Xray config (JSON)',
-                    hintText: '{"inbounds": [], "outbounds": []}',
+                    labelText: _isPersian ? 'لینک VLESS / VMess یا کانفیگ JSON' : 'VLESS / VMess link or Xray JSON',
+                    hintText: 'vless://...  |  vmess://...  |  JSON',
                     border: const OutlineInputBorder(),
                   ),
                 ),
@@ -118,15 +321,15 @@ class _V2RayScreenState extends ConsumerState<V2RayScreen> {
       _showMessage(_isPersian ? 'نام و کانفیگ را وارد کن.' : 'Enter a name and config.');
       return;
     }
+    late final String normalizedConfig;
     try {
-      final parsed = jsonDecode(config);
-      if (parsed is! Map<String, dynamic> ||
-          parsed['outbounds'] is! List ||
-          (parsed['outbounds'] as List).isEmpty) {
-        throw const FormatException('Missing outbounds');
-      }
+      normalizedConfig = jsonEncode(_buildXrayConfig(config));
     } catch (_) {
-      _showMessage(_isPersian ? 'JSON معتبر نیست یا بخش outbounds ندارد.' : 'Invalid Xray JSON or missing outbounds.');
+      _showMessage(
+        _isPersian
+            ? 'لینک یا JSON معتبر نیست. لینک VLESS/VMess یا کانفیگ کامل Xray وارد کن.'
+            : 'Invalid link or JSON. Enter a VLESS/VMess link or full Xray config.',
+      );
       return;
     }
 
