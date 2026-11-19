@@ -85,6 +85,12 @@ jobs:
           mv build/android/* .
           rm DXcore-android.zip
 
+      - name: Download pinned Xray Android core
+        run: |
+          curl -fL --retry 3 \
+            "https://github.com/2dust/AndroidLibXrayLite/releases/download/v26.11.9/libv2ray.aar" \
+            -o android/app/libs/libv2ray.aar
+
       - name: Generate .env
         uses: ./.github/actions/create-env
         with:
@@ -201,6 +207,12 @@ jobs:
           unzip -o DXcore-android.zip
           mv build/android/* .
           rm DXcore-android.zip
+
+      - name: Download pinned Xray Android core
+        run: |
+          curl -fL --retry 3 \
+            "https://github.com/2dust/AndroidLibXrayLite/releases/download/v26.11.9/libv2ray.aar" \
+            -o android/app/libs/libv2ray.aar
 
       - name: Generate .env
         uses: ./.github/actions/create-env
