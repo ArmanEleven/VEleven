@@ -68,6 +68,71 @@ jobs:
             -o android/app/libs/libv2ray.aar
           test -s android/app/libs/libv2ray.aar
 
+      - name: Deduplicate shared Go runtime safely
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/dxcore-aar /tmp/xray-aar /tmp/dxcore-classes /tmp/xray-classes
+          unzip -q android/app/libs/DXcore.aar -d /tmp/dxcore-aar
+          unzip -q android/app/libs/libv2ray.aar -d /tmp/xray-aar
+          test -f /tmp/dxcore-aar/classes.jar
+          test -f /tmp/xray-aar/classes.jar
+          (cd /tmp/dxcore-classes && jar xf /tmp/dxcore-aar/classes.jar)
+          (cd /tmp/xray-classes && jar xf /tmp/xray-aar/classes.jar)
+
+          # Both gomobile AARs embed the same go.Seq runtime. Remove it from
+          # DXcore only when every shared runtime class is byte-identical.
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib, sys
+          a = Path("/tmp/dxcore-classes/go")
+          b = Path("/tmp/xray-classes/go")
+          if not a.is_dir() or not b.is_dir():
+              sys.exit("Expected gomobile go/ runtime classes in both AARs.")
+          files_a = {p.relative_to(a).as_posix(): p for p in a.rglob("*.class")}
+          files_b = {p.relative_to(b).as_posix(): p for p in b.rglob("*.class")}
+          shared = sorted(files_a.keys() & files_b.keys())
+          if not shared:
+              sys.exit("No shared Go runtime classes found; refusing to alter AARs.")
+          for name in shared:
+              ha = hashlib.sha256(files_a[name].read_bytes()).hexdigest()
+              hb = hashlib.sha256(files_b[name].read_bytes()).hexdigest()
+              if ha != hb:
+                  sys.exit(f"Go runtime mismatch for go/{name}; refusing unsafe deduplication.")
+          if set(files_a) != set(files_b):
+              sys.exit("Go runtime class sets differ; refusing unsafe deduplication.")
+          print(f"Verified {len(shared)} byte-identical shared Go runtime classes.")
+          PY
+
+          # Native gomobile runtime libraries must also be byte-identical.
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib, sys
+          a = Path("/tmp/dxcore-aar/jni")
+          b = Path("/tmp/xray-aar/jni")
+          if not a.is_dir() or not b.is_dir():
+              sys.exit("Expected JNI libraries in both AARs; refusing unsafe deduplication.")
+          def files(root):
+              return {p.relative_to(root).as_posix(): p for p in root.rglob("*") if p.is_file()}
+          fa, fb = files(a), files(b)
+          shared = sorted(fa.keys() & fb.keys())
+          if not shared:
+              sys.exit("No shared JNI runtime files found; refusing to alter AARs.")
+          for name in shared:
+              ha = hashlib.sha256(fa[name].read_bytes()).hexdigest()
+              hb = hashlib.sha256(fb[name].read_bytes()).hexdigest()
+              if ha != hb:
+                  sys.exit(f"JNI library mismatch for {name}; refusing unsafe deduplication.")
+          if set(fa) != set(fb):
+              sys.exit("JNI library sets differ; refusing unsafe deduplication.")
+          print(f"Verified {len(shared)} byte-identical shared JNI libraries.")
+          PY
+
+          rm -rf /tmp/dxcore-classes/go /tmp/dxcore-aar/jni
+          (cd /tmp/dxcore-classes && jar cf /tmp/dxcore-aar/classes.jar .)
+          (cd /tmp/dxcore-aar && zip -qr /tmp/DXcore-deduplicated.aar .)
+          cp /tmp/DXcore-deduplicated.aar android/app/libs/DXcore.aar
+
       - name: Generate environment file
         uses: ./.github/actions/create-env
         with:
