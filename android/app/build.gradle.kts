@@ -83,6 +83,7 @@ dependencies {
 
     implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.jar"))))
     implementation(files("libs/DXcore.aar"))
+    implementation(files("libs/libv2ray.aar"))
 
     implementation("androidx.activity:activity-ktx:1.7.2")
     implementation("androidx.core:core-ktx:1.12.0")
