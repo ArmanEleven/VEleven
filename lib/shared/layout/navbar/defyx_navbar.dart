@@ -22,6 +22,7 @@ class _DefyxNavBarState extends ConsumerState<DefyxNavBar> {
   late FocusNode _speedTestFocusNode;
   late FocusNode _homeFocusNode;
   late FocusNode _settingsFocusNode;
+  late FocusNode _v2rayFocusNode;
   late FocusNode _infoBtnFocusNode;
 
   @override
@@ -30,6 +31,7 @@ class _DefyxNavBarState extends ConsumerState<DefyxNavBar> {
     _speedTestFocusNode = FocusNode();
     _homeFocusNode = FocusNode();
     _settingsFocusNode = FocusNode();
+    _v2rayFocusNode = FocusNode();
     _infoBtnFocusNode = FocusNode();
   }
 
@@ -38,6 +40,7 @@ class _DefyxNavBarState extends ConsumerState<DefyxNavBar> {
     _speedTestFocusNode.dispose();
     _homeFocusNode.dispose();
     _settingsFocusNode.dispose();
+    _v2rayFocusNode.dispose();
     _infoBtnFocusNode.dispose();
     super.dispose();
   }
@@ -59,7 +62,7 @@ class _DefyxNavBarState extends ConsumerState<DefyxNavBar> {
           alignment: Alignment.center,
           children: [
             Container(
-              width: 200.w,
+              width: 230.w,
               height:
                   (Theme.of(context).platform == TargetPlatform.iOS ||
                       Theme.of(context).platform == TargetPlatform.android)
@@ -93,6 +96,13 @@ class _DefyxNavBarState extends ConsumerState<DefyxNavBar> {
                     current: currentScreen,
                     onTap: () => _navigateToSettings(context),
                     focusNode: _settingsFocusNode,
+                  ),
+                  DefyxNavItem(
+                    screen: AppScreen.v2ray,
+                    icon: "Shield",
+                    current: currentScreen,
+                    onTap: () => context.go(DefyxVPNRoutes.v2ray.route),
+                    focusNode: _v2rayFocusNode,
                   ),
                 ],
               ),
