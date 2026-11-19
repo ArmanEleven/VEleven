@@ -1,0 +1,19 @@
+name: Validate VELEVEN Xray integration
+
+on:
+  push:
+    branches:
+      - feat/xray-engine-integration
+    paths:
+      - "android/**"
+      - ".github/workflows/android.yml"
+      - ".github/workflows/xray-validation.yml"
+      - "lib/**"
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    uses: ./.github/workflows/android.yml
+    secrets: inherit
