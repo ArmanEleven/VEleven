@@ -8,6 +8,7 @@ import '../../modules/settings/presentation/screens/settings_screen.dart';
 import '../../modules/settings/presentation/screens/split_tunnel_screen.dart';
 import '../../modules/speed_test/presentation/screens/speed_test_screen.dart';
 import '../../modules/premium/presentation/screens/premium_screen.dart';
+import '../../modules/v2ray/presentation/screens/v2ray_screen.dart';
 import '../../shared/layout/navbar/defyx_navbar.dart';
 
 enum SlideDirection { leftToRight, rightToLeft }
@@ -18,6 +19,7 @@ enum DefyxVPNRoutes {
   settings("/settings"),
   speedTest("/speedTest"),
   premium("/premium"),
+  v2ray("/v2ray"),
   splitTunnel("/settings/split_tunnel");
 
   final String route;
@@ -158,6 +160,14 @@ final routerProvider = Provider<GoRouter>((ref) {
               const SpeedTestScreen(),
               state.pageKey,
               SlideDirection.leftToRight,
+            ),
+          ),
+          GoRoute(
+            path: DefyxVPNRoutes.v2ray.route,
+            pageBuilder: (context, state) => _createPageAnimation(
+              const V2RayScreen(),
+              state.pageKey,
+              SlideDirection.rightToLeft,
             ),
           ),
           GoRoute(
