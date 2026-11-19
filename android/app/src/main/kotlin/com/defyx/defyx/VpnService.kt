@@ -196,7 +196,10 @@ class DefyxVpnService : VpnService() {
 
                 if (fd <= 0) {
                     Log.e(TAG, "Failed to establish tun interface")
+                    runCatching { vpnInterface?.close() }
+                    vpnInterface = null
                     tunnelFd = -1
+                    activeEngine = Engine.NONE
                     isVpnConnected = false
                     withContext(Dispatchers.Main) { saveVpnState(false) }
                     updateNotification("DefyxVPN", "Connection failed")
@@ -223,12 +226,21 @@ class DefyxVpnService : VpnService() {
                     notifyVpnStatus("connected")
                 } else {
                     Log.e(TAG, "Tunnel start failed")
+                    runCatching { vpnInterface?.close() }
+                    vpnInterface = null
                     tunnelFd = -1
+                    activeEngine = Engine.NONE
+                    isVpnConnected = false
                     updateNotification("DefyxVPN", "Connection failed")
                     notifyVpnStatus("disconnected")
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "startVpn failed: ${e.message}", e)
+                runCatching { vpnInterface?.close() }
+                vpnInterface = null
+                tunnelFd = -1
+                activeEngine = Engine.NONE
+                isVpnConnected = false
                 updateNotification("DefyxVPN", "Connection failed")
                 notifyVpnStatus("disconnected")
                 withContext(Dispatchers.Main) { saveVpnState(false) }
