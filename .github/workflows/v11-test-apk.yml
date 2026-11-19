@@ -42,101 +42,12 @@ jobs:
           yes | sudo "${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" --install "ndk;29.0.13846066"
           echo "ndk.dir=${ANDROID_HOME}/ndk/29.0.13846066" > android/local.properties
 
-      - name: Download public DXcore development mock
-        run: |
-          set -euo pipefail
-          mkdir -p android/app/libs
-          curl -fL --retry 3 \
-            "https://github.com/UnboundTechCo/DXcore/releases/download/r4/DXcore-android.zip" \
-            -o /tmp/DXcore-android.zip
-          echo "225d9c5661ccf7f278b584029fce4cce9940ad961643e98e6366b429d4360fb1  /tmp/DXcore-android.zip" | sha256sum -c -
-          mkdir -p /tmp/dxcore-mock
-          unzip -q /tmp/DXcore-android.zip -d /tmp/dxcore-mock
-          DXCORE_AAR="$(find /tmp/dxcore-mock -type f -name 'DXcore.aar' -print -quit)"
-          if [ -z "$DXCORE_AAR" ]; then
-            echo "::error::DXcore.aar not found in the public mock archive."
-            find /tmp/dxcore-mock -maxdepth 5 -type f -print
-            exit 1
-          fi
-          cp "$DXCORE_AAR" android/app/libs/DXcore.aar
-          echo "Installed development mock: $DXCORE_AAR"
-
       - name: Download pinned Xray Android core
         run: |
           curl -fL --retry 3 \
             "https://github.com/2dust/AndroidLibXrayLite/releases/download/v26.11.9/libv2ray.aar" \
             -o android/app/libs/libv2ray.aar
           test -s android/app/libs/libv2ray.aar
-
-      - name: Deduplicate shared Go runtime safely
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p /tmp/dxcore-aar /tmp/xray-aar /tmp/dxcore-classes /tmp/xray-classes
-          unzip -q android/app/libs/DXcore.aar -d /tmp/dxcore-aar
-          unzip -q android/app/libs/libv2ray.aar -d /tmp/xray-aar
-          test -f /tmp/dxcore-aar/classes.jar
-          test -f /tmp/xray-aar/classes.jar
-          (cd /tmp/dxcore-classes && jar xf /tmp/dxcore-aar/classes.jar)
-          (cd /tmp/xray-classes && jar xf /tmp/xray-aar/classes.jar)
-
-          # Both gomobile AARs embed the same go.Seq runtime. Remove it from
-          # DXcore only when every shared runtime class is byte-identical.
-          python3 - <<'PY'
-          from pathlib import Path
-          import hashlib, sys
-          a = Path("/tmp/dxcore-classes/go")
-          b = Path("/tmp/xray-classes/go")
-          if not a.is_dir() or not b.is_dir():
-              sys.exit("Expected gomobile go/ runtime classes in both AARs.")
-          files_a = {p.relative_to(a).as_posix(): p for p in a.rglob("*.class")}
-          files_b = {p.relative_to(b).as_posix(): p for p in b.rglob("*.class")}
-          shared = sorted(files_a.keys() & files_b.keys())
-          if not shared:
-              sys.exit("No shared Go runtime classes found; refusing to alter AARs.")
-          for name in shared:
-              ha = hashlib.sha256(files_a[name].read_bytes()).hexdigest()
-              hb = hashlib.sha256(files_b[name].read_bytes()).hexdigest()
-              if ha != hb:
-                  sys.exit(f"Go runtime mismatch for go/{name}; refusing unsafe deduplication.")
-          if not shared:
-              sys.exit("No byte-identical shared Go runtime classes; refusing unsafe deduplication.")
-          for name in shared:
-              files_a[name].unlink()
-          print(f"Verified and removed {len(shared)} byte-identical duplicate Go runtime classes; kept DXcore-only classes.")
-          PY
-
-          # Native gomobile runtime libraries must also be byte-identical.
-          python3 - <<'PY'
-          from pathlib import Path
-          import hashlib, sys
-          a = Path("/tmp/dxcore-aar/jni")
-          b = Path("/tmp/xray-aar/jni")
-          if not a.is_dir() or not b.is_dir():
-              sys.exit("Expected JNI libraries in both AARs; refusing unsafe deduplication.")
-          def files(root):
-              return {p.relative_to(root).as_posix(): p for p in root.rglob("*") if p.is_file()}
-          fa, fb = files(a), files(b)
-          shared = sorted(fa.keys() & fb.keys())
-          if not shared:
-              sys.exit("No shared JNI runtime files found; refusing to alter AARs.")
-          for name in shared:
-              ha = hashlib.sha256(fa[name].read_bytes()).hexdigest()
-              hb = hashlib.sha256(fb[name].read_bytes()).hexdigest()
-              if ha != hb:
-                  sys.exit(f"JNI library mismatch for {name}; refusing unsafe deduplication.")
-          if not shared:
-              sys.exit("No byte-identical shared JNI files; refusing unsafe deduplication.")
-          for name in shared:
-              fa[name].unlink()
-          print(f"Verified and removed {len(shared)} byte-identical duplicate JNI files; kept engine-specific libraries.")
-          PY
-
-          find /tmp/dxcore-classes -type d -empty -delete
-          find /tmp/dxcore-aar/jni -type d -empty -delete
-          (cd /tmp/dxcore-classes && jar cf /tmp/dxcore-aar/classes.jar .)
-          (cd /tmp/dxcore-aar && zip -qr /tmp/DXcore-deduplicated.aar .)
-          cp /tmp/DXcore-deduplicated.aar android/app/libs/DXcore.aar
 
       - name: Generate environment file
         uses: ./.github/actions/create-env
@@ -154,7 +65,7 @@ jobs:
       - name: Upload test APK
         uses: actions/upload-artifact@v4
         with:
-          name: VELEVEN-V11-test-arm64-DXcore-MOCK
+          name: VELEVEN-V11-test-arm64-DXcore-DEBUG-STUB
           path: build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk
           if-no-files-found: error
           retention-days: 7
