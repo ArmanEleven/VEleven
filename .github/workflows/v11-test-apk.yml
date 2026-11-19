@@ -3,14 +3,6 @@ name: V11 Development APK
 on:
   workflow_call:
   workflow_dispatch:
-  push:
-    branches:
-      - feat/xray-engine-integration
-    paths:
-      - "lib/**"
-      - "android/**"
-      - ".github/workflows/v11-test-apk.yml"
-      - "pubspec.yaml"
 
 permissions:
   contents: read
