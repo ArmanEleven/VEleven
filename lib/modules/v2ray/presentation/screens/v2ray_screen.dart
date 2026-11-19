@@ -48,6 +48,8 @@ class _V2RayScreenState extends ConsumerState<V2RayScreen> {
   Future<void> _loadProfiles() async {
     try {
       final raw = await ref.read(secureStorageProvider).read(_storageKey);
+      final savedSubscription = await ref.read(secureStorageProvider).read('veleven_v2ray_subscription_url');
+      if (savedSubscription != null) _subscriptionController.text = savedSubscription;
       final decoded = raw == null ? <dynamic>[] : jsonDecode(raw) as List<dynamic>;
       final profiles = decoded
           .whereType<Map>()
@@ -506,7 +508,8 @@ class _V2RayScreenState extends ConsumerState<V2RayScreen> {
   }
 
   Widget _page() {
-    final selected = _profiles.where((p) => p['id'] == _selectedProfileId).firstOrNull;
+    final matches = _profiles.where((p) => p['id'] == _selectedProfileId);
+    final selected = matches.isEmpty ? null : matches.first;
     final contentPadding = const EdgeInsets.fromLTRB(20, 14, 20, 24);
     if (_tabIndex == 0) {
       return ListView(padding: contentPadding, children: [
