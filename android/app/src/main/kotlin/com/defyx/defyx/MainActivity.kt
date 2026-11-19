@@ -46,6 +46,7 @@ class MainActivity : FlutterActivity() {
     private var pendingXrayConfig: String? = null
     private var pendingXraySplitMode: String = "off"
     private var pendingXraySplitApps: String = "[]"
+    private var pendingDxArgs: Map<String, String>? = null
     private val NOTIFICATION_PERMISSION_REQUEST_CODE = 1010
     private lateinit var vibrationPlugin: VibrationPlugin
     private val iconPermits = Semaphore(2)
@@ -175,6 +176,12 @@ class MainActivity : FlutterActivity() {
     }
     private fun connectVpn(args: Map<String, Any>?, result: MethodChannel.Result) {
         pendingVpnResult = result
+        pendingXrayConfig = null
+        pendingDxArgs = mapOf(
+                "mode" to (args?.get("mode") as? String ?: "off"),
+                "rules" to (args?.get("rules") as? String ?: "[]"),
+                "apps" to (args?.get("apps") as? String ?: "[]")
+        )
 
         // DefyxVpnService.setVpnStatusListener { status -> sendVpnStatusToFlutter(status) }
 
@@ -209,6 +216,7 @@ class MainActivity : FlutterActivity() {
         val vpnIntent = VpnService.prepare(this)
         if (vpnIntent != null) {
             pendingVpnResult = result
+            pendingDxArgs = null
             pendingXrayConfig = configJson
             pendingXraySplitMode = splitMode
             pendingXraySplitApps = splitApps
@@ -263,17 +271,21 @@ class MainActivity : FlutterActivity() {
 
             val xrayConfig = pendingXrayConfig
             pendingXrayConfig = null
+            val dxArgs = pendingDxArgs
+            pendingDxArgs = null
 
             if (resultCode == Activity.RESULT_OK) {
-                if (xrayConfig != null) {
-                    startXrayConnection(
-                            pendingXraySplitMode,
-                            pendingXraySplitApps,
-                            xrayConfig,
-                            res
+                when {
+                    xrayConfig != null -> startXrayConnection(
+                            pendingXraySplitMode, pendingXraySplitApps, xrayConfig, res
                     )
-                } else {
-                    res.success(true)
+                    dxArgs != null -> {
+                        DefyxVpnService.getInstance().startVpn(
+                                this, dxArgs["mode"] ?: "off", dxArgs["rules"] ?: "[]", dxArgs["apps"] ?: "[]"
+                        )
+                        res.success(true)
+                    }
+                    else -> res.success(true)
                 }
             } else {
                 res.success(false)
