@@ -193,6 +193,7 @@ class MainActivity : FlutterActivity() {
                 result.error("VPN_PERMISSION_ERROR", "Failed to request VPN permission", e.message)
             }
         } else {
+            pendingDxArgs = null
             DefyxVpnService.getInstance()
                     .startVpn(
                             this,
@@ -249,6 +250,8 @@ class MainActivity : FlutterActivity() {
             val vpnIntent = VpnService.prepare(this)
             if (vpnIntent != null) {
                 pendingVpnResult = result
+                pendingXrayConfig = null
+                pendingDxArgs = null
                 startActivityForResult(vpnIntent, VPN_REQUEST_CODE)
             } else {
                 result.success(true)
