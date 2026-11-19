@@ -280,49 +280,79 @@ class _V2RayScreenState extends ConsumerState<V2RayScreen> {
     _configController.clear();
     final accepted = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(_isPersian ? 'افزودن سرور V2Ray' : 'Add V2Ray server'),
-        content: SizedBox(
-          width: 520,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: _nameController,
-                  decoration: InputDecoration(
-                    labelText: _isPersian ? 'نام سرور' : 'Server name',
+      builder: (dialogContext) {
+        final dark = Theme.of(dialogContext).brightness == Brightness.dark;
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 20),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(25),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+              child: Container(
+                padding: const EdgeInsets.all(22),
+                decoration: BoxDecoration(
+                  color: (dark ? const Color(0xFF101B2B) : Colors.white).withValues(alpha: .94),
+                  borderRadius: BorderRadius.circular(25),
+                  border: Border.all(color: const Color(0xFF3988FF).withValues(alpha: .25)),
+                ),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(_isPersian ? 'افزودن سرور V2Ray' : 'Add V2Ray server',
+                        style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 7),
+                      const Text('Import a link or paste a full Xray JSON configuration.',
+                        style: TextStyle(fontSize: 11, color: Colors.grey)),
+                      const SizedBox(height: 20),
+                      TextField(
+                        controller: _nameController,
+                        decoration: InputDecoration(
+                          labelText: _isPersian ? 'نام سرور' : 'Server name',
+                          filled: true,
+                          fillColor: const Color(0xFF3988FF).withValues(alpha: .06),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _configController,
+                        minLines: 7,
+                        maxLines: 10,
+                        autocorrect: false,
+                        enableSuggestions: false,
+                        decoration: InputDecoration(
+                          alignLabelWithHint: true,
+                          labelText: _isPersian ? 'لینک VLESS / VMess یا کانفیگ JSON' : 'VLESS / VMess link or Xray JSON',
+                          hintText: 'vless://...  |  vmess://...  |  JSON',
+                          filled: true,
+                          fillColor: const Color(0xFF3988FF).withValues(alpha: .06),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      Row(children: [
+                        Expanded(child: OutlinedButton(
+                          onPressed: () => Navigator.pop(dialogContext, false),
+                          child: Text(_isPersian ? 'لغو' : 'Cancel'),
+                        )),
+                        const SizedBox(width: 10),
+                        Expanded(child: FilledButton(
+                          onPressed: () => Navigator.pop(dialogContext, true),
+                          style: FilledButton.styleFrom(backgroundColor: const Color(0xFF2878F0), foregroundColor: Colors.white),
+                          child: Text(_isPersian ? 'ذخیره' : 'Save'),
+                        )),
+                      ]),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _configController,
-                  minLines: 8,
-                  maxLines: 12,
-                  autocorrect: false,
-                  enableSuggestions: false,
-                  decoration: InputDecoration(
-                    alignLabelWithHint: true,
-                    labelText: _isPersian ? 'لینک VLESS / VMess یا کانفیگ JSON' : 'VLESS / VMess link or Xray JSON',
-                    hintText: 'vless://...  |  vmess://...  |  JSON',
-                    border: const OutlineInputBorder(),
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: Text(_isPersian ? 'لغو' : 'Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: Text(_isPersian ? 'ذخیره' : 'Save'),
-          ),
-        ],
-      ),
+        );
+      },
     );
 
     if (accepted != true) return;
