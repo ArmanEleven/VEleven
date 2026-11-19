@@ -82,7 +82,8 @@ dependencies {
     implementation("androidx.leanback:leanback:1.0.0")
 
     implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.jar"))))
-    // The real DXcore engine is included only in release builds. Debug builds use a compile-time mock.\n    releaseImplementation(files("libs/DXcore.aar"))
+    // The real DXcore engine is included only in release builds. Debug builds use a compile-time mock.
+    releaseImplementation(files("libs/DXcore.aar"))
     implementation(files("libs/libv2ray.aar"))
 
     implementation("androidx.activity:activity-ktx:1.7.2")
