@@ -6,14 +6,15 @@ on:
       - feat/xray-engine-integration
     paths:
       - "android/**"
-      - ".github/workflows/android.yml"
-      - ".github/workflows/xray-validation.yml"
       - "lib/**"
+      - "pubspec.yaml"
+      - ".github/workflows/xray-validation.yml"
+      - ".github/workflows/v11-test-apk.yml"
 
 permissions:
   contents: read
 
 jobs:
-  android:
-    uses: ./.github/workflows/android.yml
+  test-apk:
+    uses: ./.github/workflows/v11-test-apk.yml
     secrets: inherit
