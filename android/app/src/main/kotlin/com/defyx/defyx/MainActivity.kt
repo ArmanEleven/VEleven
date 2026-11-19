@@ -204,8 +204,8 @@ class MainActivity : FlutterActivity() {
             return
         }
 
-        val splitMode = args["mode"] as? String ?: "off"
-        val splitApps = args["apps"] as? String ?: "[]"
+        val splitMode = args?.get("mode") as? String ?: "off"
+        val splitApps = args?.get("apps") as? String ?: "[]"
         val vpnIntent = VpnService.prepare(this)
         if (vpnIntent != null) {
             pendingVpnResult = result
