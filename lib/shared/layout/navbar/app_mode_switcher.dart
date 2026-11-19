@@ -11,7 +11,6 @@ class AppModeSwitcher extends StatelessWidget {
   Widget build(BuildContext context) {
     final isV11 = GoRouterState.of(context).uri.path.startsWith('/v2ray');
     final dark = Theme.of(context).brightness == Brightness.dark;
-    final foreground = dark ? Colors.white : const Color(0xFF10233F);
     final muted = dark ? Colors.white60 : const Color(0xFF718096);
     const accent = Color(0xFF2878F0);
 
