@@ -30,6 +30,8 @@ class DefyxVpnService : VpnService() {
         private var isServiceRunning = false
         private var isVpnConnected = false
         private var connectionMethod: String? = ""
+        private enum class Engine { NONE, DX, XRAY }
+        @Volatile private var activeEngine = Engine.NONE
 
         fun setVpnStatusListener(l: (String) -> Unit) {
             listener = l
@@ -169,6 +171,7 @@ class DefyxVpnService : VpnService() {
         CoroutineScope(Dispatchers.IO).launch {
             Log.d(TAG, "startVpn called")
             try {
+                if (activeEngine == Engine.XRAY) stopActiveEngineForSwitch()
                 notifyVpnStatus("connecting")
                 startAsForeground("DefyxVPN", "Connecting...")
 
@@ -211,6 +214,7 @@ class DefyxVpnService : VpnService() {
                 val success = Android.startTunnel(fd.toLong())
 
                 isVpnConnected = success
+                activeEngine = if (success) Engine.DX else Engine.NONE
                 withContext(Dispatchers.Main) { saveVpnState(isVpnConnected) }
 
                 if (success) {
@@ -229,6 +233,87 @@ class DefyxVpnService : VpnService() {
                 withContext(Dispatchers.Main) { saveVpnState(false) }
             }
         }
+    }
+
+    /**
+     * Start Xray on the TUN interface owned by this existing DefyxVpnService.
+     * The DXcore code path remains separate and is not invoked for Xray sessions.
+     */
+    fun startXrayVpn(
+            context: Context,
+            splitMode: String,
+            splitApps: String,
+            configJson: String
+    ) {
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                require(configJson.isNotBlank()) { "Xray config is empty" }
+                stopActiveEngineForSwitch()
+
+                notifyVpnStatus("connecting")
+                startAsForeground("VELEVEN", "Connecting to V2Ray...")
+
+                val builder = Builder()
+                        .setSession("VELEVEN V2Ray")
+                        .addAddress("172.18.0.1", 30)
+                        .addAddress("fdfe:dcba:9876::1", 126)
+                        .addRoute("0.0.0.0", 0)
+                        .addRoute("::", 0)
+                        .addDnsServer("1.1.1.1")
+                        .setMtu(1500)
+                        .setBlocking(false)
+
+                applySplitApps(builder, context.packageName, splitMode, splitApps)
+                vpnInterface = builder.establish()
+                val fd = vpnInterface?.fd ?: -1
+                if (fd <= 0) error("Failed to establish VPN interface")
+
+                tunnelFd = fd
+                XrayEngine.getInstance(this@DefyxVpnService).start(configJson, fd)
+                activeEngine = Engine.XRAY
+                isVpnConnected = true
+                saveVpnState(true)
+
+                updateNotification("VELEVEN", "Connected with V2Ray")
+                notifyVpnStatus("connected")
+            } catch (e: Exception) {
+                Log.e(TAG, "Xray start failed: ${e.message}", e)
+                runCatching { XrayEngine.getInstance(this@DefyxVpnService).stop() }
+                runCatching { vpnInterface?.close() }
+                vpnInterface = null
+                tunnelFd = -1
+                activeEngine = Engine.NONE
+                isVpnConnected = false
+                saveVpnState(false)
+                updateNotification("VELEVEN", "V2Ray connection failed")
+                notifyVpnStatus("disconnected")
+            }
+        }
+    }
+
+    /**
+     * Stops only the currently active engine, then releases its shared TUN.
+     * Server/profile storage is intentionally untouched.
+     */
+    private fun stopActiveEngineForSwitch() {
+        when (activeEngine) {
+            Engine.DX -> {
+                Android.stopVPN()
+                Android.stopTunnel()
+            }
+            Engine.XRAY -> XrayEngine.getInstance(this).stop()
+            Engine.NONE -> Unit
+        }
+
+        try {
+            vpnInterface?.close()
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to close VPN interface during engine switch", e)
+        }
+        vpnInterface = null
+        tunnelFd = -1
+        activeEngine = Engine.NONE
+        isVpnConnected = false
     }
 
     private fun applySplitApps(builder: Builder, ownPackage: String, mode: String, apps: String) {
@@ -283,18 +368,11 @@ class DefyxVpnService : VpnService() {
     private fun disconnectVpn() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
+                stopActiveEngineForSwitch()
                 withContext(Dispatchers.Main) {
                     notifyVpnStatus("disconnecting")
                     updateNotification("DefyxVPN", "Disconnecting...")
                 }
-
-                try {
-                    vpnInterface?.close()
-                } catch (_: Exception) {}
-                vpnInterface = null
-
-                Android.stopVPN()
-                Android.stopTunnel()
 
                 tunnelFd = -1
                 isVpnConnected = false
