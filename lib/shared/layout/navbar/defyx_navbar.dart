@@ -50,6 +50,7 @@ class _DefyxNavBarState extends ConsumerState<DefyxNavBar> {
     final location = GoRouterState.of(context).uri.path;
     final currentScreen = _getCurrentScreenFromLocation(location);
     final settingsLoading = ref.watch(settingsLoadingProvider);
+    if (location.startsWith(DefyxVPNRoutes.v2ray.route)) return const SizedBox.shrink();
 
     final isPremiumScreen = currentScreen == AppScreen.premium;
 
