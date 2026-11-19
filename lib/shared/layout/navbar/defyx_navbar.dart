@@ -62,7 +62,7 @@ class _DefyxNavBarState extends ConsumerState<DefyxNavBar> {
           alignment: Alignment.center,
           children: [
             Container(
-              width: 230.w,
+              width: 220.w,
               height:
                   (Theme.of(context).platform == TargetPlatform.iOS ||
                       Theme.of(context).platform == TargetPlatform.android)
