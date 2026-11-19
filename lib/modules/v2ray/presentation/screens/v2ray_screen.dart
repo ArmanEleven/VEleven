@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'dart:ui';
+import 'package:dio/dio.dart';
 
 import 'package:defyx_vpn/core/data/local/secure_storage/secure_storage.dart';
 import 'package:defyx_vpn/modules/core/vpn_bridge.dart';
@@ -19,6 +21,12 @@ class _V2RayScreenState extends ConsumerState<V2RayScreen> {
   List<Map<String, String>> _profiles = [];
   bool _loading = true;
   bool _connecting = false;
+  int _tabIndex = 0;
+  String? _selectedProfileId;
+  final _subscriptionController = TextEditingController();
+  bool _subscriptionLoading = false;
+  String _usageText = 'Not provided';
+  String _expiryText = 'Not provided';
 
   bool get _isPersian =>
       Localizations.localeOf(context).languageCode.toLowerCase() == 'fa';
@@ -33,6 +41,7 @@ class _V2RayScreenState extends ConsumerState<V2RayScreen> {
   void dispose() {
     _nameController.dispose();
     _configController.dispose();
+    _subscriptionController.dispose();
     super.dispose();
   }
 
@@ -49,7 +58,7 @@ class _V2RayScreenState extends ConsumerState<V2RayScreen> {
               })
           .where((item) => item['id']!.isNotEmpty && item['configJson']!.isNotEmpty)
           .toList();
-      if (mounted) setState(() => _profiles = profiles);
+      if (mounted) setState(() { _profiles = profiles; _selectedProfileId ??= profiles.isEmpty ? null : profiles.first['id']; });
     } catch (_) {
       if (mounted) _showMessage(_isPersian ? 'خواندن فهرست سرورها ناموفق بود.' : 'Could not read the server list.');
     } finally {
@@ -376,78 +385,270 @@ class _V2RayScreenState extends ConsumerState<V2RayScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
+
+  Future<void> _importSubscription() async {
+    final url = _subscriptionController.text.trim();
+    if (!(url.startsWith('https://') || url.startsWith('http://'))) {
+      _showMessage('Enter a valid subscription URL.');
+      return;
+    }
+    setState(() => _subscriptionLoading = true);
+    try {
+      final response = await Dio().get<String>(url,
+        options: Options(responseType: ResponseType.plain, followRedirects: true));
+      var body = (response.data ?? '').trim();
+      final info = response.headers.value('subscription-userinfo') ?? '';
+      final total = RegExp(r'total=(\\d+)').firstMatch(info)?.group(1);
+      final expire = RegExp(r'expire=(\\d+)').firstMatch(info)?.group(1);
+      setState(() {
+        if (total != null) _usageText = total + ' bytes';
+        if (expire != null && int.tryParse(expire)! > 0) {
+          _expiryText = DateTime.fromMillisecondsSinceEpoch(int.parse(expire) * 1000).toLocal().toString().split('.').first;
+        }
+      });
+      if (!body.contains('://')) {
+        try { body = utf8.decode(base64.decode(base64.normalize(body))); } catch (_) {}
+      }
+      final links = body.split(RegExp(r'\\r?\\n')).map((e) => e.trim())
+          .where((e) => e.startsWith('vless://') || e.startsWith('vmess://')).toList();
+      if (links.isEmpty) throw const FormatException('No supported links');
+      final imported = <Map<String, String>>[];
+      for (var i = 0; i < links.length; i++) {
+        try {
+          final uri = Uri.tryParse(links[i]);
+          final name = uri != null && uri.fragment.isNotEmpty
+              ? Uri.decodeComponent(uri.fragment) : 'Subscription ${i + 1}';
+          imported.add({
+            'id': DateTime.now().microsecondsSinceEpoch.toString() + '_$i',
+            'name': name,
+            'configJson': jsonEncode(_buildXrayConfig(links[i])),
+          });
+        } catch (_) {}
+      }
+      if (imported.isEmpty) throw const FormatException('No valid profiles');
+      setState(() { _profiles = [..._profiles, ...imported]; _selectedProfileId ??= imported.first['id']; });
+      await _saveProfiles();
+      await ref.read(secureStorageProvider).write('veleven_v2ray_subscription_url', url);
+      _showMessage('${imported.length} servers imported.');
+    } catch (_) {
+      _showMessage('Could not import subscription. Check the URL and try again.');
+    } finally {
+      if (mounted) setState(() => _subscriptionLoading = false);
+    }
+  }
+
+  Widget _glass(Widget child) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(22),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: (dark ? const Color(0xFF101B2B) : Colors.white).withValues(alpha: .78),
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: const Color(0xFF3988FF).withValues(alpha: .20)),
+            boxShadow: [BoxShadow(color: const Color(0xFF2878F0).withValues(alpha: .07), blurRadius: 22, offset: const Offset(0, 8))],
+          ),
+          child: child,
+        ),
+      ),
+    );
+  }
+
+  Widget _heading(String title, String subtitle) => Padding(
+    padding: const EdgeInsets.only(bottom: 15),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(title, style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w800)),
+      const SizedBox(height: 4),
+      Text(subtitle, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+    ]),
+  );
+
+  Widget _bottomBar() {
+    const labels = ['Connect', 'Servers', 'Subscription', 'Settings'];
+    const icons = [Icons.power_settings_new_rounded, Icons.dns_outlined, Icons.add_link_rounded, Icons.tune_rounded];
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return SafeArea(top: false, child: Padding(
+      padding: const EdgeInsets.fromLTRB(18, 8, 18, 12),
+      child: ClipRRect(borderRadius: BorderRadius.circular(22), child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 5),
+          decoration: BoxDecoration(
+            color: (dark ? const Color(0xFF0D1726) : Colors.white).withValues(alpha: .88),
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: const Color(0xFF3988FF).withValues(alpha: .22)),
+          ),
+          child: Row(children: List.generate(4, (i) => Expanded(child: GestureDetector(
+            onTap: () => setState(() => _tabIndex = i),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 1),
+              decoration: BoxDecoration(
+                color: _tabIndex == i ? const Color(0xFF2878F0).withValues(alpha: .12) : Colors.transparent,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                Icon(icons[i], size: 20, color: _tabIndex == i ? const Color(0xFF3988FF) : (dark ? Colors.white60 : Colors.blueGrey)),
+                const SizedBox(height: 4),
+                Text(labels[i], maxLines: 1, overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 9, fontWeight: _tabIndex == i ? FontWeight.w800 : FontWeight.w500,
+                    color: _tabIndex == i ? const Color(0xFF3988FF) : (dark ? Colors.white60 : Colors.blueGrey))),
+              ]),
+            ),
+          )))),
+        ),
+      )),
+    ));
+  }
+
+  Widget _page() {
+    final selected = _profiles.where((p) => p['id'] == _selectedProfileId).firstOrNull;
+    final contentPadding = const EdgeInsets.fromLTRB(20, 14, 20, 24);
+    if (_tabIndex == 0) {
+      return ListView(padding: contentPadding, children: [
+        _heading('V11 Connect', 'Your private connection space'),
+        _glass(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Row(children: [
+            Icon(Icons.shield_rounded, color: Color(0xFF3988FF), size: 23),
+            SizedBox(width: 9),
+            Text('Account overview', style: TextStyle(fontWeight: FontWeight.w800)),
+          ]),
+          const SizedBox(height: 20),
+          Row(children: [
+            Expanded(child: _statText('Traffic limit', _usageText)),
+            Expanded(child: _statText('Expires', _expiryText)),
+          ]),
+          const SizedBox(height: 8),
+          const Text('Usage details appear when your provider sends subscription information.',
+            style: TextStyle(fontSize: 10, color: Colors.grey)),
+        ])),
+        const SizedBox(height: 16),
+        _glass(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('Selected server', style: TextStyle(fontWeight: FontWeight.w800)),
+          const SizedBox(height: 12),
+          Text(selected?['name'] ?? 'No server selected', style: const TextStyle(color: Colors.grey)),
+          const SizedBox(height: 16),
+          SizedBox(width: double.infinity, height: 52, child: FilledButton.icon(
+            onPressed: selected == null || _connecting ? null : () => _connect(selected),
+            icon: _connecting ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.power_settings_new_rounded),
+            label: Text(_connecting ? 'Starting…' : 'Connect'),
+            style: FilledButton.styleFrom(backgroundColor: const Color(0xFF2878F0), foregroundColor: Colors.white),
+          )),
+        ])),
+        const SizedBox(height: 16),
+        Row(children: [
+          Expanded(child: OutlinedButton.icon(onPressed: () => setState(() => _tabIndex = 1), icon: const Icon(Icons.dns_outlined), label: const Text('View servers'))),
+          const SizedBox(width: 10),
+          Expanded(child: OutlinedButton.icon(onPressed: () => setState(() => _tabIndex = 2), icon: const Icon(Icons.add_link_rounded), label: const Text('Add subscription'))),
+        ]),
+      ]);
+    }
+    if (_tabIndex == 1) {
+      return ListView(padding: contentPadding, children: [
+        _heading('Your servers', 'VLESS, VMess and Xray profiles'),
+        Row(children: [
+          Expanded(child: Text('${_profiles.length} profiles', style: const TextStyle(color: Colors.grey, fontSize: 12))),
+          FilledButton.icon(onPressed: _addProfile, icon: const Icon(Icons.add), label: const Text('Add server'),
+            style: FilledButton.styleFrom(backgroundColor: const Color(0xFF2878F0))),
+        ]),
+        const SizedBox(height: 14),
+        if (_profiles.isEmpty) _glass(const Text('No servers yet. Add a link or import a subscription.', style: TextStyle(color: Colors.grey)))
+        else ..._profiles.map((p) => Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: _glass(Row(children: [
+            Icon(p['id'] == _selectedProfileId ? Icons.radio_button_checked : Icons.dns_outlined, color: const Color(0xFF3988FF)),
+            const SizedBox(width: 10),
+            Expanded(child: GestureDetector(onTap: () => setState(() { _selectedProfileId = p['id']; _tabIndex = 0; }),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(p['name']!, style: const TextStyle(fontWeight: FontWeight.w700)),
+                const Text('Xray profile', style: TextStyle(color: Colors.grey, fontSize: 10)),
+              ]))),
+            IconButton(onPressed: _connecting ? null : () { setState(() => _selectedProfileId = p['id']); _connect(p); },
+              icon: const Icon(Icons.play_circle_outline, color: Color(0xFF3988FF))),
+            IconButton(onPressed: () => _delete(p), icon: const Icon(Icons.delete_outline)),
+          ])),
+        )),
+      ]);
+    }
+    if (_tabIndex == 2) {
+      return ListView(padding: contentPadding, children: [
+        _heading('Subscriptions', 'Import and refresh your server list'),
+        _glass(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('Subscription URL', style: TextStyle(fontWeight: FontWeight.w800)),
+          const SizedBox(height: 8),
+          const Text('Paste your provider URL. Supported VLESS and VMess links will be imported into your server list.',
+            style: TextStyle(color: Colors.grey, fontSize: 12, height: 1.5)),
+          const SizedBox(height: 14),
+          TextField(controller: _subscriptionController, keyboardType: TextInputType.url, autocorrect: false, enableSuggestions: false,
+            decoration: InputDecoration(hintText: 'https://example.com/subscription', prefixIcon: const Icon(Icons.link, color: Color(0xFF3988FF)),
+              filled: true, fillColor: Theme.of(context).brightness == Brightness.dark ? Colors.white.withValues(alpha: .04) : const Color(0xFFF3F7FD),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none))),
+          const SizedBox(height: 14),
+          SizedBox(width: double.infinity, height: 50, child: FilledButton.icon(
+            onPressed: _subscriptionLoading ? null : _importSubscription,
+            icon: _subscriptionLoading ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.download_rounded),
+            label: Text(_subscriptionLoading ? 'Importing…' : 'Import subscription'),
+            style: FilledButton.styleFrom(backgroundColor: const Color(0xFF2878F0), foregroundColor: Colors.white))),
+        ])),
+        const SizedBox(height: 14),
+        _glass(const Text('Single VLESS / VMess links and manual Xray JSON can be added from the Servers tab. Traffic and expiry are shown only when provided by your subscription server.',
+          style: TextStyle(fontSize: 11, color: Colors.grey, height: 1.5))),
+      ]);
+    }
+    return ListView(padding: contentPadding, children: [
+      _heading('V11 Settings', 'Workspace preferences'),
+      _glass(Column(children: [
+        ListTile(contentPadding: EdgeInsets.zero, leading: const Icon(Icons.brightness_auto, color: Color(0xFF3988FF)),
+          title: const Text('Appearance'), subtitle: Text(Theme.of(context).brightness == Brightness.dark ? 'Dark · follows device' : 'Light · follows device')),
+        Divider(color: Theme.of(context).dividerColor.withValues(alpha: .3)),
+        const ListTile(contentPadding: EdgeInsets.zero, leading: Icon(Icons.security, color: Color(0xFF3988FF)),
+          title: Text('Engine'), subtitle: Text('Xray / V2Ray')),
+        Divider(color: Theme.of(context).dividerColor.withValues(alpha: .3)),
+        const ListTile(contentPadding: EdgeInsets.zero, leading: Icon(Icons.lock_outline, color: Color(0xFF3988FF)),
+          title: Text('Profile storage'), subtitle: Text('Encrypted local storage')),
+      ])),
+    ]);
+  }
+
+  Widget _statText(String label, String value) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+    Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
+    const SizedBox(height: 4),
+    Text(label, style: const TextStyle(color: Colors.grey, fontSize: 10)),
+  ]);
+
   @override
   Widget build(BuildContext context) {
-    final title = _isPersian ? 'سرورهای V2Ray' : 'V2Ray servers';
+    final dark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      body: SafeArea(
-        child: _loading
-            ? const Center(child: CircularProgressIndicator())
-            : Column(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            _isPersian
-                                ? 'این فهرست جدا از سرورهای خودکار DX ذخیره می‌شود.'
-                                : 'This list is stored separately from the automatic DX servers.',
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        FilledButton.icon(
-                          onPressed: _addProfile,
-                          icon: const Icon(Icons.add),
-                          label: Text(_isPersian ? 'افزودن' : 'Add'),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Expanded(
-                    child: _profiles.isEmpty
-                        ? Center(
-                            child: Text(
-                              _isPersian
-                                  ? 'هنوز سروری اضافه نکردی.'
-                                  : 'No V2Ray servers added yet.',
-                            ),
-                          )
-                        : ListView.separated(
-                            padding: const EdgeInsets.all(16),
-                            itemCount: _profiles.length,
-                            separatorBuilder: (_, __) => const SizedBox(height: 8),
-                            itemBuilder: (context, index) {
-                              final profile = _profiles[index];
-                              return Card(
-                                child: ListTile(
-                                  leading: const Icon(Icons.dns_outlined),
-                                  title: Text(profile['name']!),
-                                  subtitle: Text(_isPersian ? 'پروفایل مستقل Xray' : 'Independent Xray profile'),
-                                  trailing: Wrap(
-                                    spacing: 4,
-                                    children: [
-                                      IconButton(
-                                        tooltip: _isPersian ? 'اتصال' : 'Connect',
-                                        onPressed: _connecting ? null : () => _connect(profile),
-                                        icon: const Icon(Icons.play_arrow_rounded),
-                                      ),
-                                      IconButton(
-                                        tooltip: _isPersian ? 'حذف' : 'Delete',
-                                        onPressed: () => _delete(profile),
-                                        icon: const Icon(Icons.delete_outline),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                  ),
-                ],
-              ),
+      backgroundColor: Colors.transparent,
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft, end: Alignment.bottomRight,
+            colors: dark
+              ? const [Color(0xFF07111F), Color(0xFF0B1728), Color(0xFF08101C)]
+              : const [Color(0xFFF4F8FF), Color(0xFFEAF2FF), Color(0xFFF9FBFF)],
+          ),
+        ),
+        child: Column(children: [
+          Padding(padding: const EdgeInsets.fromLTRB(22, 3, 22, 0), child: Row(children: [
+            const Text('V11', style: TextStyle(fontSize: 25, fontWeight: FontWeight.w900, letterSpacing: -.8)),
+            const Spacer(),
+            Container(padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+              decoration: BoxDecoration(color: const Color(0xFF2878F0).withValues(alpha: .12),
+                borderRadius: BorderRadius.circular(30), border: Border.all(color: const Color(0xFF3988FF).withValues(alpha: .24))),
+              child: const Row(children: [
+                Icon(Icons.circle, size: 7, color: Color(0xFF3988FF)), SizedBox(width: 7),
+                Text('XRAY ENGINE', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, letterSpacing: .8, color: Color(0xFF3988FF))),
+              ])),
+          ])),
+          Expanded(child: _loading ? const Center(child: CircularProgressIndicator(color: Color(0xFF3988FF))) : _page()),
+          _bottomBar(),
+        ]),
       ),
     );
   }
