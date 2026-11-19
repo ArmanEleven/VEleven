@@ -61,15 +61,14 @@ jobs:
 
       - name: Prepare writable Android debug signing directory
         run: |
-          mkdir -p "$RUNNER_TEMP/android-user-home"
-          chmod 700 "$RUNNER_TEMP/android-user-home"
-          echo "ANDROID_USER_HOME=$RUNNER_TEMP/android-user-home" >> "$GITHUB_ENV"
-          echo "ANDROID_PREFS_ROOT=$RUNNER_TEMP/android-user-home" >> "$GITHUB_ENV"
-          mkdir -p "$RUNNER_TEMP/android-user-home/.android"
-          chmod 700 "$RUNNER_TEMP/android-user-home/.android"
+          mkdir -p "$RUNNER_TEMP/.android"
+          chmod 700 "$RUNNER_TEMP/.android"
+          echo "ANDROID_USER_HOME=$RUNNER_TEMP/.android" >> "$GITHUB_ENV"
+          echo "ANDROID_PREFS_ROOT=$RUNNER_TEMP/.android" >> "$GITHUB_ENV"
+          echo "HOME=$RUNNER_TEMP" >> "$GITHUB_ENV"
 
       - name: Build arm64 debug APK
-        run: flutter build apk --debug --target-platform android-arm64
+        run: flutter build apk --debug --target-platform android-arm64 --verbose
 
       - name: Upload test APK
         uses: actions/upload-artifact@v4
