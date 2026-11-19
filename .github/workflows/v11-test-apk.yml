@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   build-test-apk:
-    name: Build arm64 test APK (DXcore mock)
+    name: Build arm64 test APK (DXcore debug stub)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
