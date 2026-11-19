@@ -388,6 +388,18 @@ class _V2RayScreenState extends ConsumerState<V2RayScreen> {
   }
 
 
+  String _formatBytes(int bytes) {
+    if (bytes < 1024) return '${bytes} B';
+    const units = ['KB', 'MB', 'GB', 'TB'];
+    var value = bytes / 1024;
+    var unit = 0;
+    while (value >= 1024 && unit < units.length - 1) {
+      value /= 1024;
+      unit++;
+    }
+    return '${value.toStringAsFixed(1)} ${units[unit]}';
+  }
+
   Future<void> _importSubscription() async {
     final url = _subscriptionController.text.trim();
     if (!(url.startsWith('https://') || url.startsWith('http://'))) {
@@ -405,7 +417,7 @@ class _V2RayScreenState extends ConsumerState<V2RayScreen> {
       final download = int.tryParse(RegExp(r'download=(\d+)').firstMatch(info)?.group(1) ?? '') ?? 0;
       final expire = int.tryParse(RegExp(r'expire=(\d+)').firstMatch(info)?.group(1) ?? '');
       setState(() {
-        if (total != null) _usageText = '${upload + download} / $total bytes';
+        if (total != null) _usageText = '${_formatBytes(upload + download)} / ${_formatBytes(total)}';
         if (expire != null && expire > 0) {
           _expiryText = DateTime.fromMillisecondsSinceEpoch(expire * 1000).toLocal().toString().split('.').first;
         }
