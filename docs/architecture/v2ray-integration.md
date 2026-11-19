@@ -62,13 +62,26 @@ The shared VPN service owns permission, foreground lifetime, TUN creation and cl
 - [x] Create an isolated integration branch.
 - [x] Inspect the existing Defyx VPN bridge, Android service, manifest and Gradle setup.
 - [x] Inspect V2Eleven's Xray controller boundary and build-time AAR dependency.
-- [ ] Add a dedicated Xray runtime wrapper that consumes the existing Defyx TUN descriptor.
-- [ ] Add a separately persisted V2Ray profile model and import/validation path.
-- [ ] Add engine-aware start/stop coordination without changing DXcore behavior.
-- [ ] Expose the V2Ray server section through the existing Flutter UI.
-- [ ] Add pinned Xray AAR acquisition to Android CI and build/test the APK.
+- [x] Add a dedicated Xray runtime wrapper that consumes the existing Defyx TUN descriptor.
+- [x] Add a separately persisted V2Ray profile store and initial VLESS/VMess/JSON import path (Flutter secure storage).
+- [x] Add initial engine-aware start/stop coordination in the existing Defyx VPN service.
+- [x] Expose an initial V2Ray server screen through the existing Flutter navigation.
+- [x] Add pinned Xray AAR acquisition to Android CI. APK build and device tests remain pending.
 - [ ] Verify connect, disconnect, switch DX-to-Xray, switch Xray-to-DX, failed-start recovery and preservation of both server lists.
 
 ## Important open technical check
 
 The Xray path must have a verified Android socket-protection strategy so its outbound sockets do not get routed back into the VPN interface. The integration must not be marked complete until this is confirmed and tested on a device.
+
+
+## Current implementation snapshot
+
+The integration branch now contains:
+- `XrayEngine.kt`, a wrapper around AndroidLibXrayLite's `CoreController`.
+- An Xray start path in the existing `DefyxVpnService`; it reuses that service's TUN interface instead of declaring a second Android `VpnService`.
+- A separate Flutter method-channel call, `connectXray`.
+- A V2Ray screen that stores profiles independently in the existing Flutter secure-storage abstraction.
+- Initial import support for VLESS links, VMess links, and full Xray JSON configurations. Generated link configurations include a TUN inbound.
+- A navigation entry for the V2Ray screen.
+
+This is an initial integration, not a verified release. The Android CI build and real-device connection tests have not yet been confirmed. DX-to-Xray switching, Xray-to-DX switching, process restart recovery, and profile import edge cases still need validation.
