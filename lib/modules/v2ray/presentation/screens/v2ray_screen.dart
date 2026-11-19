@@ -421,7 +421,7 @@ class _V2RayScreenState extends ConsumerState<V2RayScreen> {
 
 
   String _formatBytes(int bytes) {
-    if (bytes < 1024) return '${bytes} B';
+    if (bytes < 1024) return '$bytes B';
     const units = ['KB', 'MB', 'GB', 'TB'];
     var value = bytes / 1024;
     var unit = 0;
@@ -467,7 +467,7 @@ class _V2RayScreenState extends ConsumerState<V2RayScreen> {
           final name = uri != null && uri.fragment.isNotEmpty
               ? Uri.decodeComponent(uri.fragment) : 'Subscription ${i + 1}';
           imported.add({
-            'id': DateTime.now().microsecondsSinceEpoch.toString() + '_$i',
+            'id': '${DateTime.now().microsecondsSinceEpoch}_$i',
             'name': name,
             'configJson': jsonEncode(_buildXrayConfig(links[i])),
           });
