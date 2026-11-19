@@ -1,5 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-enum AppScreen { home, speedTest, share, settings, premium }
+enum AppScreen { home, speedTest, share, settings, premium, v2ray }
 
 final currentScreenProvider = StateProvider<AppScreen>((ref) => AppScreen.home);
