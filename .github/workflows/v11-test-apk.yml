@@ -59,6 +59,15 @@ jobs:
       - name: Install Flutter dependencies
         run: flutter pub get
 
+      - name: Prepare writable Android debug signing directory
+        run: |
+          mkdir -p "$RUNNER_TEMP/android-user-home"
+          chmod 700 "$RUNNER_TEMP/android-user-home"
+          echo "ANDROID_USER_HOME=$RUNNER_TEMP/android-user-home" >> "$GITHUB_ENV"
+          echo "ANDROID_PREFS_ROOT=$RUNNER_TEMP/android-user-home" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/android-user-home/.android"
+          chmod 700 "$RUNNER_TEMP/android-user-home/.android"
+
       - name: Build arm64 debug APK
         run: flutter build apk --debug --target-platform android-arm64
 
