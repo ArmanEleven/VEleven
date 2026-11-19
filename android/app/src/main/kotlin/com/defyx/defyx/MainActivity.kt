@@ -69,7 +69,9 @@ class MainActivity : FlutterActivity() {
                                     events: EventChannel.EventSink?
                             ) {
                                 eventSink = events
-                                // sendVpnStatusToFlutter("disconnected")
+                                DefyxVpnService.setVpnStatusListener { status ->
+                                    sendVpnStatusToFlutter(status)
+                                }
                             }
                             override fun onCancel(arguments: Any?) {
                                 eventSink = null
