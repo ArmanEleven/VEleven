@@ -403,6 +403,19 @@ class _V2RayScreenState extends ConsumerState<V2RayScreen> {
     }
   }
 
+  Future<void> _disconnect() async {
+    if (_connecting) return;
+    setState(() => _connecting = true);
+    try {
+      await VpnBridge().disconnectVpn();
+      _showMessage(_isPersian ? "اتصال قطع شد." : "Disconnected.");
+    } catch (_) {
+      _showMessage(_isPersian ? "قطع اتصال ناموفق بود." : "Could not disconnect.");
+    } finally {
+      if (mounted) setState(() => _connecting = false);
+    }
+  }
+
   Future<void> _delete(Map<String, String> profile) async {
     setState(() => _profiles.removeWhere((item) => item['id'] == profile['id']));
     try {
@@ -586,6 +599,12 @@ class _V2RayScreenState extends ConsumerState<V2RayScreen> {
             icon: _connecting ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.power_settings_new_rounded),
             label: Text(_connecting ? 'Starting…' : 'Connect'),
             style: FilledButton.styleFrom(backgroundColor: const Color(0xFF2878F0), foregroundColor: Colors.white),
+          )),
+          const SizedBox(height: 9),
+          SizedBox(width: double.infinity, height: 46, child: OutlinedButton.icon(
+            onPressed: _connecting ? null : _disconnect,
+            icon: const Icon(Icons.stop_circle_outlined),
+            label: Text(_isPersian ? 'قطع اتصال' : 'Disconnect'),
           )),
         ])),
         const SizedBox(height: 16),
