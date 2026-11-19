@@ -245,7 +245,8 @@ class DefyxVpnService : VpnService() {
             context: Context,
             splitMode: String,
             splitApps: String,
-            configJson: String
+            configJson: String,
+            onResult: (Boolean, String?) -> Unit = { _, _ -> }
     ) {
         CoroutineScope(Dispatchers.IO).launch {
             engineMutex.withLock {
@@ -279,6 +280,7 @@ class DefyxVpnService : VpnService() {
 
                 updateNotification("VELEVEN", "Connected with V2Ray")
                 notifyVpnStatus("connected")
+                withContext(Dispatchers.Main) { onResult(true, null) }
             } catch (e: Exception) {
                 Log.e(TAG, "Xray start failed: ${e.message}", e)
                 runCatching { XrayEngine.getInstance(this@DefyxVpnService).stop() }
@@ -290,6 +292,7 @@ class DefyxVpnService : VpnService() {
                 saveVpnState(false)
                 updateNotification("VELEVEN", "V2Ray connection failed")
                 notifyVpnStatus("disconnected")
+                withContext(Dispatchers.Main) { onResult(false, e.message ?: "Xray failed to start") }
                 }
             }
         }
@@ -430,11 +433,9 @@ class DefyxVpnService : VpnService() {
         }
     }
     fun disconnectVPN() {
-        try {
-            Android.stopVPN()
-        } catch (e: Exception) {
-            log("Stop VPN failed: ${e.message}")
-        }
+        // Route every disconnect through the engine-aware coordinator.
+        // Calling DXcore directly here would leave an active Xray core running.
+        stopVpn()
     }
 
     fun getFlag(): String {
