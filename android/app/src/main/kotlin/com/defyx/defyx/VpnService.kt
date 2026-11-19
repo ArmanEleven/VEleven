@@ -386,40 +386,39 @@ class DefyxVpnService : VpnService() {
                 false
             }
 
-    private fun disconnectVpn() {
+    private fun disconnectVpn(onResult: ((Boolean, String?) -> Unit)? = null) {
         CoroutineScope(Dispatchers.IO).launch {
             engineMutex.withLock {
                 try {
+                    withContext(Dispatchers.Main) {
+                        notifyVpnStatus("disconnecting")
+                        updateNotification("DefyxVPN", "Disconnecting...")
+                    }
                     stopActiveEngineForSwitch()
-                withContext(Dispatchers.Main) {
-                    notifyVpnStatus("disconnecting")
-                    updateNotification("DefyxVPN", "Disconnecting...")
-                }
-
-                tunnelFd = -1
-                isVpnConnected = false
-                isServiceRunning = false
-                saveVpnState(false)
-
-                withContext(Dispatchers.Main) {
-                    notifyVpnStatus("disconnected")
-                    stopForeground(STOP_FOREGROUND_REMOVE)
-                    val notificationManager =
-                            getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                    notificationManager.cancel(NOTIFICATION_ID)
-                    stopSelf()
-                }
+                    tunnelFd = -1
+                    isVpnConnected = false
+                    isServiceRunning = false
+                    saveVpnState(false)
+                    withContext(Dispatchers.Main) {
+                        notifyVpnStatus("disconnected")
+                        stopForeground(STOP_FOREGROUND_REMOVE)
+                        val notificationManager =
+                                getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                        notificationManager.cancel(NOTIFICATION_ID)
+                        stopSelf()
+                        onResult?.invoke(true, null)
+                    }
                 } catch (e: Exception) {
                     log("Error stopping VPN: ${e.message}")
+                    withContext(Dispatchers.Main) { onResult?.invoke(false, e.message) }
                 }
             }
         }
     }
 
-    fun stopVpn() {
-        disconnectVpn()
+    fun stopVpn(onResult: ((Boolean, String?) -> Unit)? = null) {
+        disconnectVpn(onResult)
     }
-
     fun measurePing(): Long {
         return try {
             Android.measurePing()
