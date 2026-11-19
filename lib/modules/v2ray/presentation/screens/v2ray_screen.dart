@@ -68,7 +68,7 @@ class _V2RayScreenState extends ConsumerState<V2RayScreen> {
     }
     if (raw.startsWith('vmess://')) {
       final encoded = raw.substring('vmess://'.length).split('#').first;
-      final normalized = base64Url.normalize(encoded);
+      final normalized = base64Url.normalize(encoded.replaceAll('+', '-').replaceAll('/', '_'));
       final decoded = jsonDecode(utf8.decode(base64Url.decode(normalized)));
       if (decoded is! Map<String, dynamic>) {
         throw const FormatException('Invalid VMess payload');
@@ -336,7 +336,7 @@ class _V2RayScreenState extends ConsumerState<V2RayScreen> {
     final id = DateTime.now().microsecondsSinceEpoch.toString();
     setState(() => _profiles = [
           ..._profiles,
-          {'id': id, 'name': name, 'configJson': config},
+          {'id': id, 'name': name, 'configJson': normalizedConfig},
         ]);
     try {
       await _saveProfiles();
