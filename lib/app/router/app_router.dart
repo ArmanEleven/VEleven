@@ -10,6 +10,7 @@ import '../../modules/speed_test/presentation/screens/speed_test_screen.dart';
 import '../../modules/premium/presentation/screens/premium_screen.dart';
 import '../../modules/v2ray/presentation/screens/v2ray_screen.dart';
 import '../../shared/layout/navbar/defyx_navbar.dart';
+import '../../shared/layout/navbar/app_mode_switcher.dart';
 
 enum SlideDirection { leftToRight, rightToLeft }
 
@@ -116,14 +117,21 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state, child) {
           return Scaffold(
             extendBody: true,
-            body: Stack(
+            body: Column(
               children: [
-                child,
-                const Positioned(
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  child: DefyxNavBar(),
+                const AppModeSwitcher(),
+                Expanded(
+                  child: Stack(
+                    children: [
+                      child,
+                      const Positioned(
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        child: DefyxNavBar(),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
