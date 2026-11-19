@@ -220,8 +220,19 @@ class MainActivity : FlutterActivity() {
                 result.error("VPN_PERMISSION_ERROR", "Failed to request VPN permission", e.message)
             }
         } else {
-            DefyxVpnService.getInstance().startXrayVpn(this, splitMode, splitApps, configJson)
-            result.success(true)
+            startXrayConnection(splitMode, splitApps, configJson, result)
+        }
+    }
+
+    private fun startXrayConnection(
+            splitMode: String,
+            splitApps: String,
+            configJson: String,
+            result: MethodChannel.Result
+    ) {
+        DefyxVpnService.getInstance().startXrayVpn(this, splitMode, splitApps, configJson) { success, error ->
+            if (success) result.success(true)
+            else result.error("XRAY_START_FAILED", error ?: "Xray failed to start", null)
         }
     }
 
@@ -255,14 +266,15 @@ class MainActivity : FlutterActivity() {
 
             if (resultCode == Activity.RESULT_OK) {
                 if (xrayConfig != null) {
-                    DefyxVpnService.getInstance().startXrayVpn(
-                            this,
+                    startXrayConnection(
                             pendingXraySplitMode,
                             pendingXraySplitApps,
-                            xrayConfig
+                            xrayConfig,
+                            res
                     )
+                } else {
+                    res.success(true)
                 }
-                res.success(true)
             } else {
                 res.success(false)
             }
