@@ -43,6 +43,9 @@ class MainActivity : FlutterActivity() {
     private val VIBRATION_CHANNEL = "com.defyx.vibration"
     private var eventSink: EventChannel.EventSink? = null
     private var pendingVpnResult: MethodChannel.Result? = null
+    private var pendingXrayConfig: String? = null
+    private var pendingXraySplitMode: String = "off"
+    private var pendingXraySplitApps: String = "[]"
     private val NOTIFICATION_PERMISSION_REQUEST_CODE = 1010
     private lateinit var vibrationPlugin: VibrationPlugin
     private val iconPermits = Semaphore(2)
@@ -128,6 +131,7 @@ class MainActivity : FlutterActivity() {
         try {
             when (call.method) {
                 "connect" -> connectVpn(call.arguments as? Map<String, Any>, result)
+                "connectXray" -> connectXray(call.arguments as? Map<String, Any>, result)
                 "disconnect" -> disconnectVpn(result)
                 "isVPNPrepared" -> result.success(true)
                 "prepareVPN" -> grantVpnPermission(result)
@@ -191,6 +195,34 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    private fun connectXray(args: Map<String, Any>?, result: MethodChannel.Result) {
+        val configJson = args?.get("configJson") as? String
+        if (configJson.isNullOrBlank()) {
+            result.error("INVALID_ARGUMENT", "configJson is missing or empty", null)
+            return
+        }
+
+        val splitMode = args["mode"] as? String ?: "off"
+        val splitApps = args["apps"] as? String ?: "[]"
+        val vpnIntent = VpnService.prepare(this)
+        if (vpnIntent != null) {
+            pendingVpnResult = result
+            pendingXrayConfig = configJson
+            pendingXraySplitMode = splitMode
+            pendingXraySplitApps = splitApps
+            try {
+                startActivityForResult(vpnIntent, VPN_REQUEST_CODE)
+            } catch (e: Exception) {
+                pendingXrayConfig = null
+                pendingVpnResult = null
+                result.error("VPN_PERMISSION_ERROR", "Failed to request VPN permission", e.message)
+            }
+        } else {
+            DefyxVpnService.getInstance().startXrayVpn(this, splitMode, splitApps, configJson)
+            result.success(true)
+        }
+    }
+
     private fun grantVpnPermission(result: MethodChannel.Result) {
         try {
             val vpnIntent = VpnService.prepare(this)
@@ -216,7 +248,18 @@ class MainActivity : FlutterActivity() {
             val res = pendingVpnResult ?: return
             pendingVpnResult = null
 
+            val xrayConfig = pendingXrayConfig
+            pendingXrayConfig = null
+
             if (resultCode == Activity.RESULT_OK) {
+                if (xrayConfig != null) {
+                    DefyxVpnService.getInstance().startXrayVpn(
+                            this,
+                            pendingXraySplitMode,
+                            pendingXraySplitApps,
+                            xrayConfig
+                    )
+                }
                 res.success(true)
             } else {
                 res.success(false)
