@@ -54,7 +54,7 @@ internal class XrayEngine private constructor(context: Context) {
 
             override fun onEmitStatus(level: Long, message: String?): Long {
                 // Do not log configuration text or credentials.
-                Log.d(TAG, "Core status ($level): ${message.orEmpty()}")
+                Log.d(TAG, "Core status level=$level")
                 return 0
             }
         })
