@@ -25,8 +25,8 @@ class DefyxVpnService : VpnService() {
         private const val TAG = "DefyxVpnService"
         private const val NOTIFICATION_ID = 1
         private const val CHANNEL_ID = "defyx_vpn_channel"
-        @Volatile private lateinit var instance: DefyxVpnService
-        fun getInstance(): DefyxVpnService = instance
+        @Volatile private var instance: DefyxVpnService? = null
+        fun getInstance(): DefyxVpnService = checkNotNull(instance) { "VPN service is not running" }
         private var vpnInterface: ParcelFileDescriptor? = null
         private var listener: ((String) -> Unit)? = null
         private var tunnelFd = -1
@@ -53,6 +53,7 @@ class DefyxVpnService : VpnService() {
     override fun onDestroy() {
         runCatching { stopActiveEngineForSwitch() }
         super.onDestroy()
+        if (instance === this) instance = null
         log("VPN Service Destroyed")
     }
 
@@ -405,7 +406,7 @@ class DefyxVpnService : VpnService() {
                         val notificationManager =
                                 getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                         notificationManager.cancel(NOTIFICATION_ID)
-                        stopSelf()
+                        // Keep the started service alive while disconnected so it can be reused.
                         onResult?.invoke(true, null)
                     }
                 } catch (e: Exception) {
