@@ -296,14 +296,16 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    private fun disconnectVpn(result: MethodChannel.Result) =
-            try {
-                DefyxVpnService.getInstance().stopVpn()
+    private fun disconnectVpn(result: MethodChannel.Result) {
+        DefyxVpnService.getInstance().stopVpn { success, error ->
+            if (success) {
                 sendVpnStatusToFlutter("disconnected")
                 result.success(true)
-            } catch (e: Exception) {
-                result.error("VPN_STOP_ERROR", "Failed to stop VPN", e.message)
+            } else {
+                result.error("VPN_STOP_ERROR", "Failed to stop VPN", error)
             }
+        }
+    }
 
     private fun getVpnStatus(result: MethodChannel.Result) =
             try {
@@ -375,17 +377,7 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun stopVPN(result: MethodChannel.Result) {
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                DefyxVpnService.getInstance().disconnectVPN()
-                result.success(true)
-            } catch (e: Exception) {
-                Log.e("Stop VPN", "Stop VPN failed: ${e.message}", e)
-                withContext(Dispatchers.Main) {
-                    result.error("PING_ERROR", "Failed to Stop VPN", e.localizedMessage)
-                }
-            }
-        }
+        disconnectVpn(result)
     }
 
     private fun getInstalledApps(result: MethodChannel.Result) {
