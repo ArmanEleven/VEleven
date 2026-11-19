@@ -15,9 +15,12 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.edit
 import java.io.File
 import kotlinx.coroutines.*
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.json.JSONArray
 
 class DefyxVpnService : VpnService() {
+    private val engineMutex = Mutex()
     companion object {
         private const val TAG = "DefyxVpnService"
         private const val NOTIFICATION_ID = 1
@@ -166,7 +169,8 @@ class DefyxVpnService : VpnService() {
 
     fun startVpn(context: Context, splitMode: String, splitRules: String, splitApps: String) {
         CoroutineScope(Dispatchers.IO).launch {
-            Log.d(TAG, "startVpn called")
+            engineMutex.withLock {
+                Log.d(TAG, "startVpn called")
             try {
                 if (activeEngine == Engine.XRAY) stopActiveEngineForSwitch()
                 notifyVpnStatus("connecting")
@@ -228,6 +232,7 @@ class DefyxVpnService : VpnService() {
                 updateNotification("DefyxVPN", "Connection failed")
                 notifyVpnStatus("disconnected")
                 withContext(Dispatchers.Main) { saveVpnState(false) }
+                }
             }
         }
     }
@@ -243,8 +248,9 @@ class DefyxVpnService : VpnService() {
             configJson: String
     ) {
         CoroutineScope(Dispatchers.IO).launch {
-            try {
-                require(configJson.isNotBlank()) { "Xray config is empty" }
+            engineMutex.withLock {
+                try {
+                    require(configJson.isNotBlank()) { "Xray config is empty" }
                 stopActiveEngineForSwitch()
 
                 notifyVpnStatus("connecting")
@@ -284,6 +290,7 @@ class DefyxVpnService : VpnService() {
                 saveVpnState(false)
                 updateNotification("VELEVEN", "V2Ray connection failed")
                 notifyVpnStatus("disconnected")
+                }
             }
         }
     }
@@ -366,8 +373,9 @@ class DefyxVpnService : VpnService() {
 
     private fun disconnectVpn() {
         CoroutineScope(Dispatchers.IO).launch {
-            try {
-                stopActiveEngineForSwitch()
+            engineMutex.withLock {
+                try {
+                    stopActiveEngineForSwitch()
                 withContext(Dispatchers.Main) {
                     notifyVpnStatus("disconnecting")
                     updateNotification("DefyxVPN", "Disconnecting...")
@@ -386,8 +394,9 @@ class DefyxVpnService : VpnService() {
                     notificationManager.cancel(NOTIFICATION_ID)
                     stopSelf()
                 }
-            } catch (e: Exception) {
-                log("Error stopping VPN: ${e.message}")
+                } catch (e: Exception) {
+                    log("Error stopping VPN: ${e.message}")
+                }
             }
         }
     }
