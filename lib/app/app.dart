@@ -162,7 +162,7 @@ class _AppState extends ConsumerState<App> {
             title: 'Defyx',
             theme: AppTheme.lightTheme,
             darkTheme: AppTheme.darkTheme,
-            themeMode: ThemeMode.light,
+            themeMode: ThemeMode.system,
             routerConfig: router,
             builder: _appBuilder,
             debugShowCheckedModeBanner: false,
