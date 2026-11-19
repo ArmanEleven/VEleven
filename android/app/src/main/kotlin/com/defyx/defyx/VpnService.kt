@@ -48,10 +48,7 @@ class DefyxVpnService : VpnService() {
     }
 
     override fun onDestroy() {
-        try {
-            vpnInterface?.close()
-        } catch (_: Exception) {}
-        vpnInterface = null
+        runCatching { stopActiveEngineForSwitch() }
         super.onDestroy()
         log("VPN Service Destroyed")
     }
@@ -296,24 +293,26 @@ class DefyxVpnService : VpnService() {
      * Server/profile storage is intentionally untouched.
      */
     private fun stopActiveEngineForSwitch() {
-        when (activeEngine) {
-            Engine.DX -> {
-                Android.stopVPN()
-                Android.stopTunnel()
-            }
-            Engine.XRAY -> XrayEngine.getInstance(this).stop()
-            Engine.NONE -> Unit
-        }
-
         try {
-            vpnInterface?.close()
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to close VPN interface during engine switch", e)
+            when (activeEngine) {
+                Engine.DX -> {
+                    Android.stopVPN()
+                    Android.stopTunnel()
+                }
+                Engine.XRAY -> XrayEngine.getInstance(this).stop()
+                Engine.NONE -> Unit
+            }
+        } finally {
+            try {
+                vpnInterface?.close()
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to close VPN interface during engine switch", e)
+            }
+            vpnInterface = null
+            tunnelFd = -1
+            activeEngine = Engine.NONE
+            isVpnConnected = false
         }
-        vpnInterface = null
-        tunnelFd = -1
-        activeEngine = Engine.NONE
-        isVpnConnected = false
     }
 
     private fun applySplitApps(builder: Builder, ownPackage: String, mode: String, apps: String) {
