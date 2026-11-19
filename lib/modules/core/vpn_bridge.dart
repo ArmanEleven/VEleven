@@ -21,6 +21,20 @@ class VpnBridge {
   Future<void> setTimezone(String timezone) =>
       _methodChannel.invokeMethod("setTimezone", {"timezone": timezone});
 
+  /// Starts an Xray profile through the existing Defyx Android VPN service.
+  /// The profile JSON is independent from the DX Flowline/server data.
+  Future<bool> connectXray({
+    required String configJson,
+    String mode = 'off',
+    String apps = '[]',
+  }) async =>
+      (await _methodChannel.invokeMethod<bool>('connectXray', {
+        'configJson': configJson,
+        'mode': mode,
+        'apps': apps,
+      })) ??
+      false;
+
   Future<void> disconnectVpn() async =>
       await _methodChannel.invokeMethod('disconnect');
 
