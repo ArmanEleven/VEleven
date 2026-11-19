@@ -99,9 +99,11 @@ jobs:
               hb = hashlib.sha256(files_b[name].read_bytes()).hexdigest()
               if ha != hb:
                   sys.exit(f"Go runtime mismatch for go/{name}; refusing unsafe deduplication.")
-          if set(files_a) != set(files_b):
-              sys.exit("Go runtime class sets differ; refusing unsafe deduplication.")
-          print(f"Verified {len(shared)} byte-identical shared Go runtime classes.")
+          if not shared:
+              sys.exit("No byte-identical shared Go runtime classes; refusing unsafe deduplication.")
+          for name in shared:
+              files_a[name].unlink()
+          print(f"Verified and removed {len(shared)} byte-identical duplicate Go runtime classes; kept DXcore-only classes.")
           PY
 
           # Native gomobile runtime libraries must also be byte-identical.
@@ -123,12 +125,15 @@ jobs:
               hb = hashlib.sha256(fb[name].read_bytes()).hexdigest()
               if ha != hb:
                   sys.exit(f"JNI library mismatch for {name}; refusing unsafe deduplication.")
-          if set(fa) != set(fb):
-              sys.exit("JNI library sets differ; refusing unsafe deduplication.")
-          print(f"Verified {len(shared)} byte-identical shared JNI libraries.")
+          if not shared:
+              sys.exit("No byte-identical shared JNI files; refusing unsafe deduplication.")
+          for name in shared:
+              fa[name].unlink()
+          print(f"Verified and removed {len(shared)} byte-identical duplicate JNI files; kept engine-specific libraries.")
           PY
 
-          rm -rf /tmp/dxcore-classes/go /tmp/dxcore-aar/jni
+          find /tmp/dxcore-classes -type d -empty -delete
+          find /tmp/dxcore-aar/jni -type d -empty -delete
           (cd /tmp/dxcore-classes && jar cf /tmp/dxcore-aar/classes.jar .)
           (cd /tmp/dxcore-aar && zip -qr /tmp/DXcore-deduplicated.aar .)
           cp /tmp/DXcore-deduplicated.aar android/app/libs/DXcore.aar
