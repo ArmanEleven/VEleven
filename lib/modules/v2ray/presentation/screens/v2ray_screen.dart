@@ -400,8 +400,8 @@ class _V2RayScreenState extends ConsumerState<V2RayScreen> {
         options: Options(responseType: ResponseType.plain, followRedirects: true));
       var body = (response.data ?? '').trim();
       final info = response.headers.value('subscription-userinfo') ?? '';
-      final total = RegExp(r'total=(\\d+)').firstMatch(info)?.group(1);
-      final expire = RegExp(r'expire=(\\d+)').firstMatch(info)?.group(1);
+      final total = RegExp(r'total=(\d+)').firstMatch(info)?.group(1);
+      final expire = RegExp(r'expire=(\d+)').firstMatch(info)?.group(1);
       setState(() {
         if (total != null) _usageText = total + ' bytes';
         if (expire != null && int.tryParse(expire)! > 0) {
@@ -411,7 +411,7 @@ class _V2RayScreenState extends ConsumerState<V2RayScreen> {
       if (!body.contains('://')) {
         try { body = utf8.decode(base64.decode(base64.normalize(body))); } catch (_) {}
       }
-      final links = body.split(RegExp(r'\\r?\\n')).map((e) => e.trim())
+      final links = body.split(RegExp(r'\r?\n')).map((e) => e.trim())
           .where((e) => e.startsWith('vless://') || e.startsWith('vmess://')).toList();
       if (links.isEmpty) throw const FormatException('No supported links');
       final imported = <Map<String, String>>[];
