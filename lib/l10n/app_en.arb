@@ -729,5 +729,9 @@
   "speedTestConnectionUnstable": "Your connection was unstable, and the test was interrupted.",
   "@speedTestConnectionUnstable": {
     "description": "Speed test error message - connection unstable"
+  },
+  "autoModeDisabledInDev": "Auto mode is disabled in this development build.",
+  "@autoModeDisabledInDev": {
+    "description": "Message shown when Auto mode is blocked by the debug DXcore stub"
   }
 }
