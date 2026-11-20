@@ -112,7 +112,7 @@ val verifyReleaseDxcore = tasks.register("verifyReleaseDxcore") {
 }
 
 tasks.matching {
-    it.name == "preReleaseBuild" || it.name == "assembleRelease" || it.name == "bundleRelease"
+    it.name.contains("Release") && it.name != "verifyReleaseDxcore"
 }.configureEach {
     dependsOn(verifyReleaseDxcore)
 }
