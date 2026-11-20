@@ -1,0 +1,105 @@
+name: Defyx Android development Stub APK
+
+on:
+  push:
+    branches:
+      - feat/dxcore-stub-ci-hardening
+    paths:
+      - "android/**"
+      - "lib/**"
+      - "pubspec.yaml"
+      - ".env.exmaple"
+      - ".github/workflows/dev-stub-build.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-debug-apk:
+    name: Build Android arm64 Debug APK with Kotlin DXcore stub
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.6"
+          channel: stable
+          architecture: x64
+          cache: false
+
+      - name: Install Android NDK 29
+        run: |
+          yes | "${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" --install "ndk;29.0.13846066"
+          echo "ndk.dir=${ANDROID_HOME}/ndk/29.0.13846066" > android/local.properties
+
+      - name: Create non-production environment file
+        run: |
+          test -f .env.exmaple || { echo "::error::.env.exmaple is missing"; exit 1; }
+          cp .env.exmaple .env
+          if ! grep -q '^API_BASE_URL=' .env; then
+            echo 'API_BASE_URL=https://example.invalid' >> .env
+          fi
+          echo "Using placeholder .env values only; no repository secrets are read."
+
+      - name: Download pinned Xray Android core
+        run: |
+          mkdir -p android/app/libs
+          curl -fL --retry 3 \
+            "https://github.com/2dust/AndroidLibXrayLite/releases/download/v26.11.9/libv2ray.aar" \
+            -o android/app/libs/libv2ray.aar
+          test -s android/app/libs/libv2ray.aar
+
+      - name: Install Flutter dependencies
+        run: flutter pub get
+
+      - name: Build arm64 Debug APK
+        run: |
+          flutter build apk --debug --target-platform android-arm64 --dart-define=DEFYX_DEV_STUB=true
+          test -s build/app/outputs/flutter-apk/app-debug.apk
+
+      - name: Verify Release rejects a marked Stub AAR
+        shell: bash
+        run: |
+          mkdir -p android/app/libs
+          python3 - <<'PY'
+          import io, zipfile
+          from pathlib import Path
+          aar = Path("android/app/libs/DXcore.aar")
+          classes = io.BytesIO()
+          with zipfile.ZipFile(classes, "w"):
+              pass
+          with zipfile.ZipFile(aar, "w") as z:
+              z.writestr("DXCORE_STUB_MARKER", "development stub - never release")
+              z.writestr("AndroidManifest.xml", "<manifest />")
+              z.writestr("classes.jar", classes.getvalue())
+          PY
+          if flutter build apk --release --target-platform android-arm64 --dart-define=DEFYX_DEV_STUB=true > release-stub-check.log 2>&1; then
+            cat release-stub-check.log
+            echo "::error::Release unexpectedly succeeded with a marked Stub AAR."
+            exit 1
+          fi
+          if ! grep -q "DXCORE_STUB_MARKER" release-stub-check.log; then
+            cat release-stub-check.log
+            echo "::error::Release failed, but not because the DXcore Stub guard ran."
+            exit 1
+          fi
+          rm -f android/app/libs/DXcore.aar
+          echo "Release Stub guard behaved as expected."
+
+      - name: Upload Debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: defyx-dev-stub.apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
