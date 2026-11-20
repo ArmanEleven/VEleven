@@ -91,6 +91,17 @@ class MainActivity : FlutterActivity() {
             vibrationPlugin.handleMethodCall(call, result)
         }
     }
+    private fun isStubBuild(): Boolean {
+        return try {
+            val method = Class.forName("android.Android").getMethod("isStub")
+            method.invoke(null) as? Boolean ?: false
+        } catch (_: ReflectiveOperationException) {
+            false
+        } catch (_: LinkageError) {
+            false
+        }
+    }
+
     private fun grantNotificationPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             ActivityCompat.requestPermissions(
@@ -133,6 +144,7 @@ class MainActivity : FlutterActivity() {
     private suspend fun handleMethodCall(call: MethodCall, result: MethodChannel.Result) {
         try {
             when (call.method) {
+                "isStubBuild" -> result.success(isStubBuild())
                 "connect" -> connectVpn(call.arguments as? Map<String, Any>, result)
                 "connectXray" -> connectXray(call.arguments as? Map<String, Any>, result)
                 "disconnect" -> disconnectVpn(result)
