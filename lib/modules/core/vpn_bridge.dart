@@ -9,6 +9,16 @@ class VpnBridge {
 
   final _methodChannel = MethodChannel('com.defyx.vpn');
 
+  Future<bool> isStubBuild() async {
+    try {
+      return await _methodChannel.invokeMethod<bool>('isStubBuild') ?? false;
+    } on MissingPluginException {
+      return false;
+    } on PlatformException {
+      return false;
+    }
+  }
+
   Future<String?> getVpnStatus() async =>
       await _methodChannel.invokeMethod('getVpnStatus');
 
