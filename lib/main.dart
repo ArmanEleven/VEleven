@@ -21,6 +21,8 @@ void main(List<String> arguments) async {
 
   WidgetsFlutterBinding.ensureInitialized();
 
+  const isDevStubBuild = bool.fromEnvironment('DEFYX_DEV_STUB');
+
   if (TunnelProcess.matches(arguments)) {
     await TunnelProcess.run(arguments);
     return;
@@ -72,7 +74,7 @@ void main(List<String> arguments) async {
   }
 
   // Initialize Firebase only on supported platforms (not Windows)
-  if (!Platform.isWindows && !Platform.isLinux) {
+  if (!isDevStubBuild && !Platform.isWindows && !Platform.isLinux) {
     await Firebase.initializeApp(
       name: "defyx-vpn",
       options: DefaultFirebaseOptions.currentPlatform,
@@ -91,6 +93,17 @@ void main(List<String> arguments) async {
     // Pass all uncaught asynchronous errors to Crashlytics
     PlatformDispatcher.instance.onError = (error, stack) {
       FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+      return true;
+    };
+  } else if (isDevStubBuild) {
+    // Development Stub APKs use placeholder environment values and must not
+    // initialize or send events to the production Firebase project.
+    FlutterError.onError = (errorDetails) {
+      debugPrint('Development Stub build error: ${errorDetails.exception}');
+      FlutterError.presentError(errorDetails);
+    };
+    PlatformDispatcher.instance.onError = (error, stack) {
+      debugPrint('Development Stub async error: $error');
       return true;
     };
   } else {
