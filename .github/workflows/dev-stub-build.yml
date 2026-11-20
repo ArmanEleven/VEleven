@@ -39,8 +39,8 @@ jobs:
 
       - name: Accept Android SDK licenses and install NDK 29
         run: |
-          yes | sudo "${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" --licenses
-          yes | sudo "${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" --install "ndk;29.0.13846066"
+          yes | "${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" --licenses || true
+          "${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" --install "ndk;29.0.13846066"
           echo "ndk.dir=${ANDROID_HOME}/ndk/29.0.13846066" > android/local.properties
 
       - name: Create non-production environment file
