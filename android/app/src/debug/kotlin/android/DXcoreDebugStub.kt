@@ -21,6 +21,7 @@ interface CrashListener {
 }
 
 object Android {
+    @JvmStatic fun isStub(): Boolean = true
     @JvmStatic fun setSocketProtector(protector: SocketProtector?) {}
     @JvmStatic fun setSplitTunnel(mode: String, rules: String, apps: String) {}
     @JvmStatic fun startTunnel(fd: Long): Boolean = false
