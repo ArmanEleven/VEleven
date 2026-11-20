@@ -1,4 +1,5 @@
 import java.util.Properties
+import java.util.zip.ZipFile
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 val keystoreProperties = Properties()
@@ -90,4 +91,28 @@ dependencies {
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+}
+
+
+// Release builds must never package a development DXcore stub. The current
+// debug stub is source-set isolated, but this also protects against a marked
+// stub AAR being copied into libs/DXcore.aar by mistake.
+val verifyReleaseDxcore = tasks.register("verifyReleaseDxcore") {
+    doLast {
+        val dxcoreAar = layout.projectDirectory.file("libs/DXcore.aar").asFile
+        if (!dxcoreAar.isFile) {
+            throw GradleException("Release build requires the real DXcore AAR at android/app/libs/DXcore.aar.")
+        }
+        ZipFile(dxcoreAar).use { aar ->
+            if (aar.getEntry("DXCORE_STUB_MARKER") != null) {
+                throw GradleException("DXCORE_STUB_MARKER detected in DXcore.aar. Refusing to build a Release with the development stub.")
+            }
+        }
+    }
+}
+
+tasks.matching {
+    it.name == "preReleaseBuild" || it.name == "assembleRelease" || it.name == "bundleRelease"
+}.configureEach {
+    dependsOn(verifyReleaseDxcore)
 }
