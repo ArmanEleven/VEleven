@@ -8,6 +8,7 @@ import 'package:defyx_vpn/modules/core/desktop_tunnel/desktop_tunnel.dart';
 import 'package:defyx_vpn/modules/core/log.dart';
 import 'package:defyx_vpn/modules/core/network.dart';
 import 'package:defyx_vpn/modules/core/vpn_bridge.dart';
+import 'package:defyx_vpn/l10n/app_localizations.dart';
 import 'package:defyx_vpn/modules/main/application/main_screen_provider.dart';
 import 'package:defyx_vpn/modules/settings/providers/auth_provider.dart';
 import 'package:defyx_vpn/modules/settings/models/popular_app.dart';
@@ -247,6 +248,22 @@ class VPN {
     );
     final loggerNotifier = _container?.read(loggerStateProvider.notifier);
     final settings = _container?.read(settingsProvider.notifier);
+
+    // The Kotlin DXcore stand-in is compiled into Debug builds only. Never
+    // attempt an Auto/DX connection when that stand-in is active.
+    if (Platform.isAndroid && await _vpnBridge.isStubBuild()) {
+      connectionNotifier?.setDisconnected();
+      log.addLog('[INFO] Auto mode is disabled in this development build.');
+      final context = rootNavigatorKey.currentContext;
+      if (context != null) {
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          SnackBar(
+            content: Text(AppLocalizations.of(context).autoModeDisabledInDev),
+          ),
+        );
+      }
+      return;
+    }
 
     _setConnectionStep(1);
 
