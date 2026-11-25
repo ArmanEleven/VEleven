@@ -41,6 +41,102 @@ jobs:
             -o android/app/libs/libv2ray.aar
           test -s android/app/libs/libv2ray.aar
 
+      - name: Download DXcore and inspect AAR compatibility
+        env:
+          DXCORE_PRIVATE_ACCESS_TOKEN: ${{ secrets.DXCORE_PRIVATE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$DXCORE_PRIVATE_ACCESS_TOKEN" || {
+            echo "DXCORE_PRIVATE_ACCESS_TOKEN is missing or empty."
+            exit 1
+          }
+
+          RELEASE_JSON="$RUNNER_TEMP/dxcore-release.json"
+          PACKAGE_DIR="$RUNNER_TEMP/dxcore-package"
+          INSPECT_DIR="$RUNNER_TEMP/aar-inspection"
+          mkdir -p "$PACKAGE_DIR" "$INSPECT_DIR" android/app/libs
+
+          curl -fLsS \
+            -H "Authorization: token $DXCORE_PRIVATE_ACCESS_TOKEN" \
+            "https://api.github.com/repos/UnboundTechCo/DXcore-private/releases/latest" \
+            -o "$RELEASE_JSON"
+
+          ASSET_ID="$(jq -r '.assets[]? | select(.name == "DXcore-android.zip") | .id' "$RELEASE_JSON")"
+          test -n "$ASSET_ID" && test "$ASSET_ID" != "null" || {
+            echo "DXcore-android.zip was not found in the latest private release."
+            exit 1
+          }
+
+          curl -fLsS -L \
+            -H "Authorization: token $DXCORE_PRIVATE_ACCESS_TOKEN" \
+            -H "Accept: application/octet-stream" \
+            "https://api.github.com/repos/UnboundTechCo/DXcore-private/releases/assets/$ASSET_ID" \
+            -o "$RUNNER_TEMP/DXcore-android.zip"
+
+          unzip -q -o "$RUNNER_TEMP/DXcore-android.zip" -d "$PACKAGE_DIR"
+          test -d "$PACKAGE_DIR/build/android" || {
+            echo "Expected build/android directory was not present in the DXcore package."
+            find "$PACKAGE_DIR" -maxdepth 4 -type f -printf '%P\\n' | head -80
+            exit 1
+          }
+          cp -a "$PACKAGE_DIR/build/android/." android/app/libs/
+          DXCORE_AAR="android/app/libs/DXcore.aar"
+          XRAY_AAR="android/app/libs/libv2ray.aar"
+          test -s "$DXCORE_AAR"
+          test -s "$XRAY_AAR"
+
+          mkdir -p "$INSPECT_DIR/dxcore" "$INSPECT_DIR/xray"
+          unzip -p "$DXCORE_AAR" classes.jar > "$INSPECT_DIR/dxcore/classes.jar"
+          unzip -p "$XRAY_AAR" classes.jar > "$INSPECT_DIR/xray/classes.jar"
+          jar tf "$INSPECT_DIR/dxcore/classes.jar" | sort -u > "$INSPECT_DIR/dxcore/classes.txt"
+          jar tf "$INSPECT_DIR/xray/classes.jar" | sort -u > "$INSPECT_DIR/xray/classes.txt"
+          comm -12 "$INSPECT_DIR/dxcore/classes.txt" "$INSPECT_DIR/xray/classes.txt" > "$INSPECT_DIR/duplicate-classes.txt"
+
+          {
+            echo "## DXcore / Xray AAR compatibility inspection"
+            echo
+            echo "- DXcore AAR size: $(stat -c '%s' "$DXCORE_AAR") bytes"
+            echo "- Xray AAR size: $(stat -c '%s' "$XRAY_AAR") bytes"
+            echo "- DXcore Java classes: $(wc -l < "$INSPECT_DIR/dxcore/classes.txt" | tr -d ' ')"
+            echo "- Xray Java classes: $(wc -l < "$INSPECT_DIR/xray/classes.txt" | tr -d ' ')"
+            echo "- Duplicate Java classes: $(wc -l < "$INSPECT_DIR/duplicate-classes.txt" | tr -d ' ')"
+            echo
+            echo "### Duplicate class names (first 100)"
+            if test -s "$INSPECT_DIR/duplicate-classes.txt"; then
+              sed -n '1,100p' "$INSPECT_DIR/duplicate-classes.txt"
+            else
+              echo "None"
+            fi
+            echo
+            echo "### Native library entries"
+            for AAR in "$DXCORE_AAR" "$XRAY_AAR"; do
+              echo "- $(basename "$AAR"):"
+              unzip -Z1 "$AAR" | grep -E '^jni/[^/]+/[^/]+\\.so$' || true
+            done
+            echo
+            echo "### arm64 libgojni fingerprints"
+            for NAME in dxcore xray; do
+              AAR="$DXCORE_AAR"
+              test "$NAME" = "xray" && AAR="$XRAY_AAR"
+              ENTRY="$(unzip -Z1 "$AAR" | grep -E '^jni/arm64-v8a/libgojni\\.so$' | head -1 || true)"
+              if test -n "$ENTRY"; then
+                unzip -p "$AAR" "$ENTRY" > "$INSPECT_DIR/$NAME/libgojni.so"
+                echo "- $NAME: $(sha256sum "$INSPECT_DIR/$NAME/libgojni.so" | awk '{print $1}')"
+              else
+                echo "- $NAME: no arm64 libgojni.so entry"
+              fi
+            done
+            echo
+            echo "### Go binding classes"
+            for CLASS in go/Seq.class go/Go.class android/Android.class libv2ray/Libv2ray.class; do
+              printf '%s: ' "$CLASS"
+              for NAME in dxcore xray; do
+                grep -Fxq "$CLASS" "$INSPECT_DIR/$NAME/classes.txt" && printf '%s=present ' "$NAME" || printf '%s=absent ' "$NAME"
+              done
+              echo
+            done
+          } | tee "$INSPECT_DIR/report.md" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Generate environment file
         uses: ./.github/actions/create-env
         with:
